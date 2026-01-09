@@ -16,6 +16,9 @@
         body { font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s, color 0.3s; }
         .drag-active { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.1); }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        /* Smooth drag animations */
+        .file-item { transition: transform 0.2s, box-shadow 0.2s; }
+        .file-item.dragging { opacity: 0.5; transform: scale(0.98); }
     </style>
 
     <!-- LIBRARIES -->
@@ -41,15 +44,9 @@
         const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
 
         // --- ICONS ---
-        const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-        const IconGrid = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
-        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
-        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
-        const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-        const IconSun = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
-        const IconMoon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
-        const IconArrowUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>;
-        const IconArrowDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>;
+        // (Moved inside App component for scope safety)
+
+
 
         // --- UTILS ---
 
@@ -73,60 +70,52 @@
             return canvas.toDataURL();
         };
 
-        // RASTERIZATION HELPER (For Invert/LowDPI)
         const rasterizePage = async (pdfDocProxy, pageIndex, dpi = 150, invert = false) => {
-            const page = await pdfDocProxy.getPage(pageIndex + 1); // pdf.js is 1-based
+            const page = await pdfDocProxy.getPage(pageIndex + 1);
             const scale = dpi / 72;
             const viewport = page.getViewport({ scale });
-            
             const canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
             const ctx = canvas.getContext('2d');
-
-            // Render
             await page.render({ canvasContext: ctx, viewport }).promise;
 
             if (invert) {
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const data = imageData.data;
                 for (let i = 0; i < data.length; i += 4) {
-                    data[i] = 255 - data[i];     // R
-                    data[i + 1] = 255 - data[i + 1]; // G
-                    data[i + 2] = 255 - data[i + 2]; // B
+                    data[i] = 255 - data[i];     
+                    data[i + 1] = 255 - data[i + 1]; 
+                    data[i + 2] = 255 - data[i + 2]; 
                 }
                 ctx.putImageData(imageData, 0, 0);
             }
 
-            return canvas.toDataURL('image/jpeg', 0.85); // 85% Quality JPEG
+            return canvas.toDataURL('image/jpeg', 0.85);
         };
 
-        const processPDF = async (files, settings) => {
-            // 1. Prepare Resources
-            const loadedPDFFiles = {};  // PDFLib Docs (for vector copy)
-            const loadedPDFProxies = {}; // PDF.js Proxies (for rasterization)
-            
+        const processPDF = async (files, settings, onProgress) => {
+            const loadedPDFFiles = {};  
+            const loadedPDFProxies = {}; 
             const useRaster = settings.invert || settings.low_dpi;
             const dpi = settings.low_dpi ? 72 : 150;
+
+            if (onProgress) onProgress("Loading source files...");
 
             for (const f of files) {
                 if (f.isVirtual) continue;
                 if (!loadedPDFFiles[f.id]) {
                     const arrayBuffer = await readFileAsync(f.fileObj);
-                    
-                    // Always load PDFLib for page counting/management
                     loadedPDFFiles[f.id] = await PDFDocument.load(arrayBuffer);
-                    
-                    // Load PDF.js only if rasterizing
                     if (useRaster) {
-                        // Clone buffer because PDFLib might detach it? (Usually safe, but safer to copy)
                         const buffCopy = arrayBuffer.slice(0);
                         loadedPDFProxies[f.id] = await pdfjsLib.getDocument(buffCopy).promise;
                     }
                 }
             }
 
-            // 2. Build Page Map
+            if (onProgress) onProgress("Calculating layout...");
+
             const pageMap = [];
             for (const item of files) {
                 if (item.isVirtual) {
@@ -134,12 +123,9 @@
                     else if (item.type === 'text') pageMap.push({ type: 'placeholder', text: item.text });
                     continue;
                 }
-                
-                const srcDoc = loadedPDFFiles[item.id]; // Use PDFLib for correct count
+                const srcDoc = loadedPDFFiles[item.id];
                 const pageCount = srcDoc.getPageCount();
-                
                 if (settings.separator) pageMap.push({ type: 'separator', text: item.name });
-
                 const selection = item.selectedPages;
                 if (selection === 'all') {
                     for (let p = 0; p < pageCount; p++) pageMap.push({ type: 'page', docId: item.id, pageIndex: p });
@@ -153,18 +139,14 @@
                 }
             }
 
-            // 3. Create Output
             const outDoc = await PDFDocument.create();
             const font = await outDoc.embedFont(StandardFonts.Helvetica);
-            
             const rows = parseInt(settings.rows || 1);
             const cols = parseInt(settings.cols || 1);
             const n_up = rows * cols;
-            
             const A4_SHORT = 595.28;
             const A4_LONG = 841.89;
             let pw = A4_SHORT, ph = A4_LONG;
-            
             const orient = settings.orientation || 'auto';
             if (orient === 'landscape') { pw = A4_LONG; ph = A4_SHORT; }
             else if (orient === 'portrait') { pw = A4_SHORT; ph = A4_LONG; }
@@ -175,60 +157,44 @@
 
             const cellW = pw / cols;
             const cellH = ph / rows;
-            
             let currentOutPage = null;
             let gridIndex = 0;
             let sheetCount = 0;
 
-            // Helper: Draw Page Number with White Stroke
             const drawPageNum = (page, num, pageW) => {
                  const text = String(num);
                  const size = 12;
                  const textWidth = font.widthOfTextAtSize(text, size);
                  const x = (pageW - textWidth) / 2;
                  const y = 30;
-                 
-                 // Stroke (White) - 8 directions for thick stroke
-                 const offset = 1; 
                  const dirs = [[-1,-1], [-1,1], [1,-1], [1,1], [0,-1], [0,1], [-1,0], [1,0]];
                  dirs.forEach(([dx, dy]) => {
                      page.drawText(text, { x: x + (dx*0.5), y: y + (dy*0.5), size, font, color: rgb(1,1,1) });
                  });
-                 
-                 // Fill (Black)
                  page.drawText(text, { x, y, size, font, color: rgb(0,0,0) });
             };
 
             for (let i = 0; i < pageMap.length; i++) {
+                // Yield to UI thread to allow progress update
+                if (i % 2 === 0 || useRaster) {
+                    if (onProgress) onProgress(`Processing item ${i + 1} of ${pageMap.length}...`);
+                    await new Promise(r => setTimeout(r, 0));
+                }
+
                 const item = pageMap[i];
-                
-                // SEPARATOR
                 if (item.type === 'separator') {
                     if (gridIndex > 0) {
-                        if (settings.page_numbers && currentOutPage) {
-                             drawPageNum(currentOutPage, sheetCount, pw);
-                        }
+                        if (settings.page_numbers && currentOutPage) drawPageNum(currentOutPage, sheetCount, pw);
                         gridIndex = 0; 
                     }
                     const sepPage = outDoc.addPage([pw, ph]);
                     sheetCount++;
-
                     const txt = item.text || "Separator";
                     let fSize = 36;
                     let tW = font.widthOfTextAtSize(txt, fSize);
                     if (tW > pw - 40) { fSize = 18; tW = font.widthOfTextAtSize(txt, fSize); }
-                    
-                    sepPage.drawText(txt, { 
-                        x: (pw - tW)/2, 
-                        y: ph/2, 
-                        size: fSize, 
-                        font, 
-                        color: rgb(0,0,0) 
-                    });
-
-                    if (settings.page_numbers) {
-                         drawPageNum(sepPage, sheetCount, pw);
-                    }
+                    sepPage.drawText(txt, { x: (pw - tW)/2, y: ph/2, size: fSize, font, color: rgb(0,0,0) });
+                    if (settings.page_numbers) drawPageNum(sepPage, sheetCount, pw);
                     continue;
                 }
 
@@ -238,103 +204,84 @@
                      sheetCount++;
                 }
 
-                const c = gridIndex % cols;
-                const r = Math.floor(gridIndex / cols);
+                let c, r;
+                if (settings.fill_direction === 'col') {
+                    // Vertical Fill (N-Order): Fill Col 0, then Col 1...
+                    // In this mode, gridIndex 0 is (0,0), 1 is (0,1), 2 is (1,0) etc. if rows=2
+                    // Correct formula for Column-Major with fixed rows:
+                    r = gridIndex % rows;
+                    c = Math.floor(gridIndex / rows);
+                } else {
+                    // Horizontal Fill (Z-Order): Fill Row 0, then Row 1...
+                    c = gridIndex % cols;
+                    r = Math.floor(gridIndex / cols);
+                }
+
                 const x = c * cellW;
-                const y = ph - ((r + 1) * cellH);
+                const y = ph - ((r + 1) * cellH); // PDF Y is bottom-up
 
                 // DRAW CONTENT
+
                 if (item.type === 'page') {
                     const rotationDeg = parseInt(settings.rotate || 0);
                     const isSideRotation = rotationDeg === 90 || rotationDeg === 270;
-
                     if (useRaster) {
-                        // --- RASTER PATH ---
                         const proxy = loadedPDFProxies[item.docId];
                         const imgDataUrl = await rasterizePage(proxy, item.pageIndex, dpi, settings.invert);
                         const img = await outDoc.embedJpg(imgDataUrl);
-                        
                         const iW = isSideRotation ? img.height : img.width;
                         const iH = isSideRotation ? img.width : img.height;
-                        
                         const scale = Math.min(cellW / iW, cellH / iH);
                         const fitW = img.width * scale;
                         const fitH = img.height * scale;
-                        
                         const effW = isSideRotation ? fitH : fitW;
                         const effH = isSideRotation ? fitW : fitH;
-
                         const cx = x + (cellW - effW) / 2;
                         const cy = y + (cellH - effH) / 2;
-                        
                         currentOutPage.drawImage(img, {
                             x: cx + (isSideRotation ? (rotationDeg === 90 ? 0 : effW) : 0),
                             y: cy + (isSideRotation ? (rotationDeg === 90 ? effH : 0) : 0),
-                            width: fitW,
-                            height: fitH,
-                            rotation: degrees(rotationDeg)
+                            width: fitW, height: fitH, rotation: degrees(rotationDeg)
                         });
-
                     } else {
-                        // --- VECTOR PATH ---
                         const srcDoc = loadedPDFFiles[item.docId];
                         const [embeddedPage] = await outDoc.embedPages([srcDoc.getPages()[item.pageIndex]]);
-                        
                         const pW = isSideRotation ? embeddedPage.height : embeddedPage.width;
                         const pH = isSideRotation ? embeddedPage.width : embeddedPage.height;
-                        
                         const scale = Math.min(cellW / pW, cellH / pH);
                         const fitW = embeddedPage.width * scale;
                         const fitH = embeddedPage.height * scale;
-                        
                         const effW = isSideRotation ? fitH : fitW;
                         const effH = isSideRotation ? fitW : fitH;
-
                         const cx = x + (cellW - effW) / 2;
                         const cy = y + (cellH - effH) / 2;
-                        
                         currentOutPage.drawPage(embeddedPage, {
                             x: cx + (isSideRotation ? (rotationDeg === 90 ? 0 : effW) : 0),
                             y: cy + (isSideRotation ? (rotationDeg === 90 ? effH : 0) : 0),
-                            width: fitW,
-                            height: fitH,
-                            rotation: degrees(rotationDeg)
+                            width: fitW, height: fitH, rotation: degrees(rotationDeg)
                         });
                     }
                 } else if (item.type === 'placeholder') {
                     const txt = item.text;
                     const fs = 14;
                     const tw = font.widthOfTextAtSize(txt, fs);
-                    currentOutPage.drawText(txt, {
-                        x: x + (cellW - tw) / 2,
-                        y: y + cellH / 2,
-                        size: fs,
-                        font,
-                        color: rgb(0.5, 0.5, 0.5)
-                    });
+                    currentOutPage.drawText(txt, { x: x + (cellW - tw) / 2, y: y + cellH / 2, size: fs, font, color: rgb(0.5, 0.5, 0.5) });
                 }
                 
                 if (settings.border) {
-                    currentOutPage.drawRectangle({
-                        x: x, y: y, width: cellW, height: cellH,
-                        borderWidth: 1,
-                        borderColor: rgb(0,0,0),
-                        opacity: 0, borderOpacity: 1
-                    });
+                    currentOutPage.drawRectangle({ x, y, width: cellW, height: cellH, borderWidth: 1, borderColor: rgb(0,0,0), opacity: 0, borderOpacity: 1 });
                 }
 
                 gridIndex++;
                 if (gridIndex >= n_up) {
-                    if (settings.page_numbers) {
-                         drawPageNum(currentOutPage, sheetCount, pw);
-                    }
+                    if (settings.page_numbers) drawPageNum(currentOutPage, sheetCount, pw);
                     gridIndex = 0;
                 }
             }
-            if (gridIndex > 0 && settings.page_numbers && currentOutPage) {
-                 drawPageNum(currentOutPage, sheetCount, pw);
-            }
-
+            if (gridIndex > 0 && settings.page_numbers && currentOutPage) drawPageNum(currentOutPage, sheetCount, pw);
+            
+            if (onProgress) onProgress("Saving PDF...");
+            await new Promise(r => setTimeout(r, 50));
             return await outDoc.save();
         };
         
@@ -342,13 +289,10 @@
             const srcDoc = await PDFDocument.load(pdfBytes);
             const frontDoc = await PDFDocument.create();
             const backDoc = await PDFDocument.create();
-            
             const pageCount = srcDoc.getPageCount();
             const indices = Array.from({length: pageCount}, (_, i) => i);
-            
             const frontIndices = indices.filter(i => i % 2 === 0);
             const backIndices = indices.filter(i => i % 2 !== 0).reverse();
-            
             if (frontIndices.length > 0) {
                 const pages = await frontDoc.copyPages(srcDoc, frontIndices);
                 pages.forEach(p => frontDoc.addPage(p));
@@ -357,11 +301,7 @@
                 const pages = await backDoc.copyPages(srcDoc, backIndices);
                 pages.forEach(p => backDoc.addPage(p));
             }
-            
-            return {
-                fronts: await frontDoc.save(),
-                backs: await backDoc.save()
-            };
+            return { fronts: await frontDoc.save(), backs: await backDoc.save() };
         };
 
         // --- COMPONENTS ---
@@ -374,13 +314,9 @@
 
             useEffect(() => {
                 if (isOpen && file) {
-                    setThumbnails([]);
-                    setLoading(true);
-                    if (file.selectedPages === 'all') {
-                         setSequence(Array.from({length: file.pages}, (_, i) => ({ type: 'page', index: i })))
-                    } else {
-                        setSequence(file.selectedPages);
-                    }
+                    setThumbnails([]); setLoading(true);
+                    if (file.selectedPages === 'all') setSequence(Array.from({length: file.pages}, (_, i) => ({ type: 'page', index: i })));
+                    else setSequence(file.selectedPages);
                     loadThumbs();
                 }
             }, [isOpen, file]);
@@ -390,7 +326,7 @@
                 try {
                     const ab = await readFileAsync(file.fileObj);
                     const pdf = await pdfjsLib.getDocument(ab).promise;
-                    const max = Math.min(pdf.numPages, 48); // Limit for performance
+                    const max = Math.min(pdf.numPages, 48);
                     const thumbs = [];
                     for(let i=1; i<=max; i++){
                         const url = await generateThumbnail(pdf, i);
@@ -409,9 +345,7 @@
                     else if (part.startsWith('t:')) result.push({ type: 'text', text: part.substring(2) });
                     else if (part.includes('-')) {
                         const [start, end] = part.split('-').map(Number);
-                        if (!isNaN(start) && !isNaN(end)) {
-                            for (let i = start; i <= end; i++) result.push({ type: 'page', index: i - 1 });
-                        }
+                        if (!isNaN(start) && !isNaN(end)) for (let i = start; i <= end; i++) result.push({ type: 'page', index: i - 1 });
                     } else {
                         const num = Number(part);
                         if (!isNaN(num)) result.push({ type: 'page', index: num - 1 });
@@ -422,9 +356,8 @@
 
             const applyRange = (action) => {
                 const parsed = parseRange(rangeInput);
-                if (action === 'select') {
-                    setSequence(prev => [...prev, ...parsed]);
-                } else {
+                if (action === 'select') setSequence(prev => [...prev, ...parsed]);
+                else {
                     const toExclude = new Set(parsed.filter(r => r.type === 'page').map(r => r.index));
                     setSequence(prev => prev.filter(s => s.type !== 'page' || !toExclude.has(s.index)));
                 }
@@ -435,22 +368,15 @@
 
             const togglePage = (idx) => {
                 const exists = sequence.find(s => s.type === 'page' && s.index === idx);
-                if (exists) {
-                    setSequence(prev => prev.filter(s => !(s.type === 'page' && s.index === idx)));
-                } else {
-                    setSequence(prev => [...prev, { type: 'page', index: idx }].sort((a,b) => (a.index ?? 0) - (b.index ?? 0)));
-                }
+                if (exists) setSequence(prev => prev.filter(s => !(s.type === 'page' && s.index === idx)));
+                else setSequence(prev => [...prev, { type: 'page', index: idx }].sort((a,b) => (a.index ?? 0) - (b.index ?? 0)));
             };
             
             const insertAt = (idx, item) => {
                 const newSeq = [...sequence];
                 const targetPos = sequence.findIndex(s => s.type === 'page' && s.index === idx);
-                if (targetPos !== -1) {
-                    newSeq.splice(targetPos + 1, 0, item);
-                    setSequence(newSeq);
-                } else {
-                    setSequence(prev => [...prev, item]);
-                }
+                if (targetPos !== -1) { newSeq.splice(targetPos + 1, 0, item); setSequence(newSeq); }
+                else setSequence(prev => [...prev, item]);
             };
 
             const selectedIndices = new Set(sequence.filter(s => s.type === 'page').map(s => s.index));
@@ -459,10 +385,9 @@
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[90vh] rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col shadow-2xl overflow-hidden">
                         <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
-                            <div><h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2"><IconGrid /> Custom Sequence: {file.name}</h3></div>
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2"><IconGrid /> Custom Sequence: {file.name}</h3>
                             <button onClick={onClose} className="text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white"><IconX /></button>
                         </div>
-                        
                         <div className="p-3 bg-white dark:bg-slate-950 border-b border-gray-200 dark:border-slate-800 flex flex-col md:flex-row gap-4 items-center justify-between">
                             <div className="flex gap-2">
                                 <button onClick={() => setSequence(Array.from({length: file.pages}, (_, i) => ({ type: 'page', index: i })))} className="px-3 py-1.5 text-xs font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 rounded hover:bg-blue-100">All</button>
@@ -475,7 +400,6 @@
                                 <button onClick={() => applyRange('deselect')} className="px-3 py-1 text-xs font-bold bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded hover:bg-red-200">Exclude</button>
                             </div>
                         </div>
-
                         <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-slate-950">
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
                                 {thumbnails.map((item) => {
@@ -487,24 +411,21 @@
                                                 <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold transition ${isSel ? 'bg-blue-500' : 'bg-black/50'}`}>{item.index+1}</div>
                                             </div>
                                             <div className="flex gap-1">
-                                                <button onClick={() => insertAt(item.index, {type: 'blank'})} title="Insert Blank After" className="flex-1 py-1 text-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-100 text-gray-500"> + Blank</button>
-                                                <button onClick={() => { const t = prompt("Text?"); if(t) insertAt(item.index, {type: 'text', text: t}); }} title="Insert Text After" className="flex-1 py-1 text-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-100 text-gray-500"> + Text</button>
+                                                <button onClick={() => insertAt(item.index, {type: 'blank'})} className="flex-1 py-1 text-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-100 text-gray-500"> + Blank</button>
+                                                <button onClick={() => { const t = prompt("Text?"); if(t) insertAt(item.index, {type: 'text', text: t}); }} className="flex-1 py-1 text-[10px] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-100 text-gray-500"> + Text</button>
                                             </div>
                                         </div>
                                     )
                                 })}
                             </div>
-                            
                             {sequence.length > 0 && (
                                 <div className="mt-12 p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm">
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Sequence Preview</h4>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase mb-3">Preview Sequence</h4>
                                     <div className="flex flex-wrap gap-2">
                                         {sequence.map((s, idx) => (
                                             <div key={idx} className="px-2 py-1 rounded bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-[10px] flex items-center gap-1 group">
                                                 <span className="text-gray-400">{idx+1}.</span>
-                                                <span className="font-bold text-gray-700 dark:text-slate-200">
-                                                    {s.type === 'page' ? `Page ${s.index + 1}` : s.type === 'blank' ? 'Blank' : `Text: ${s.text}`}
-                                                </span>
+                                                <span className="font-bold text-gray-700 dark:text-slate-200">{s.type === 'page' ? `Page ${s.index + 1}` : s.type === 'blank' ? 'Blank' : `Text: ${s.text}`}</span>
                                                 <button onClick={() => setSequence(prev => prev.filter((_, i) => i !== idx))} className="ml-1 text-red-500 opacity-0 group-hover:opacity-100">×</button>
                                             </div>
                                         ))}
@@ -512,7 +433,6 @@
                                 </div>
                             )}
                         </div>
-
                         <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
                             <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white">Cancel</button>
                             <button onClick={() => { onSave(sequence); onClose(); }} className="px-6 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg">Save Selection</button>
@@ -525,256 +445,215 @@
         function GridLayoutPreview({ settings }) {
             const { rows, cols, orientation } = settings;
             const isLandscape = orientation === 'landscape' || (orientation === 'auto' && cols > rows);
-            const containerStyle = isLandscape 
-                ? { width: '100%', aspectRatio: '1.414/1' } 
-                : { width: '70%', aspectRatio: '1/1.414', margin: '0 auto' };
-
+            const containerStyle = isLandscape ? { width: '100%', aspectRatio: '1.414/1' } : { width: '70%', aspectRatio: '1/1.414', margin: '0 auto' };
             const cells = [];
-            for (let i = 0; i < (rows * cols); i++) {
-                cells.push(
-                    <div key={i} className="border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-center text-[8px] text-blue-400 dark:text-blue-700 font-mono">
-                        {i + 1}
-                    </div>
-                );
-            }
+            for (let i = 0; i < (rows * cols); i++) cells.push(<div key={i} className="border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-900/20 flex items-center justify-center text-[8px] text-blue-400 dark:text-blue-700 font-mono">{i + 1}</div>);
             return (
                 <div className="mb-6">
-                    <label className="text-xs font-bold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-3 block">Layout Preview</label>
+                    <label className="text-xs font-bold text-gray-500 dark:text-slate-500 uppercase mb-3 block">Layout Preview</label>
                     <div className="bg-gray-100 dark:bg-slate-950 rounded-lg p-4 flex items-center justify-center">
-                        <div className="bg-white dark:bg-slate-900 shadow-sm border border-gray-200 dark:border-slate-800 grid gap-0.5 p-0.5 overflow-hidden" 
-                             style={{ 
-                                 ...containerStyle,
-                                 gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                                 gridTemplateRows: `repeat(${rows}, 1fr)`
-                             }}>
-                            {cells}
-                        </div>
+                        <div className="bg-white dark:bg-slate-900 shadow-sm border border-gray-200 dark:border-slate-800 grid gap-0.5 p-0.5 overflow-hidden transition-all duration-300 ease-out" 
+                             style={{ ...containerStyle, gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>{cells}</div>
                     </div>
                 </div>
             );
         }
 
-        function ProcessingOverlay({ isOpen }) {
-            const [msg, setMsg] = useState("Preparing files...");
-            
-            useEffect(() => {
-                if (!isOpen) return;
-                const messages = [
-                    "Rasterizing pages...",
-                    "Applying grid layout...",
-                    "Inverting colors...",
-                    "Compressing output...",
-                    "Finalizing PDF..."
-                ];
-                let i = 0;
-                const interval = setInterval(() => {
-                    setMsg(messages[i % messages.length]);
-                    i++;
-                }, 2000);
-                return () => clearInterval(interval);
-            }, [isOpen]);
-
+        function ProcessingOverlay({ isOpen, status }) {
             if (!isOpen) return null;
-
             return (
                 <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm transition-all duration-500">
                     <div className="relative w-24 h-24 mb-8">
                         <div className="absolute inset-0 border-4 border-blue-100 dark:border-slate-800 rounded-full"></div>
                         <div className="absolute inset-0 border-4 border-blue-600 dark:border-blue-500 rounded-full border-t-transparent animate-spin"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                             <svg className="w-8 h-8 text-blue-600 dark:text-blue-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                        </div>
                     </div>
-                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 animate-pulse mb-2">{msg}</h2>
+                    <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 animate-pulse mb-2 text-center px-4">{status || "Processing..."}</h2>
                     <p className="text-gray-500 dark:text-slate-400 text-sm font-medium">Please keep this tab open</p>
                 </div>
             );
         }
 
         function App() {
+            // --- ICONS (Defined locally to ensure scope availability) ---
+            const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+            const IconGrid = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+            const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+            const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>;
+            const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+            const IconSun = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+            const IconMoon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+            const IconGrip = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>;
+            const IconArrowUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>;
+            const IconArrowDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/></svg>;
+
             const [files, setFiles] = useState([]); 
-            const [settings, setSettings] = useState({
-                rows: 1, cols: 1, 
-                orientation: "auto", rotate: 0,
-                invert: false, low_dpi: false, border: false, page_numbers: false, page_number_color: "#000000", separator: false,
-                compress: false,
-                exclude_mode: 'skip',
-                separate_sheets: false
-            });
+            const [settings, setSettings] = useState({ rows: 1, cols: 1, orientation: "auto", rotate: 0, invert: false, low_dpi: false, border: false, page_numbers: false, page_number_color: "#000000", separator: false, separate_sheets: false });
             const [isProcessing, setIsProcessing] = useState(false);
+            const [progressStatus, setProgressStatus] = useState("Preparing...");
             const [modal, setModal] = useState({ open: false, fileId: null });
             const [theme, setTheme] = useState('light');
+            const [draggedIdx, setDraggedIdx] = useState(null);
 
             useEffect(() => {
                 if (theme === 'dark') document.documentElement.classList.add('dark');
                 else document.documentElement.classList.remove('dark');
             }, [theme]);
 
-            const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-
             const handleFiles = async (fileList) => {
-                const newUploads = Array.from(fileList).map(f => ({
-                    id: Math.random().toString(36).substr(2, 9), 
-                    fileObj: f, 
-                    name: f.name, 
-                    pages: 0, 
-                    status: 'loading', 
-                    selectedPages: 'all',
-                    isVirtual: false
-                }));
-                
+                const newUploads = Array.from(fileList).map(f => ({ id: Math.random().toString(36).substr(2, 9), fileObj: f, name: f.name, pages: 0, status: 'loading', selectedPages: 'all', isVirtual: false }));
                 setFiles(prev => [...prev, ...newUploads]);
-                
                 for (let item of newUploads) {
                     try {
                         const ab = await readFileAsync(item.fileObj);
                         const pdf = await pdfjsLib.getDocument(ab).promise;
                         setFiles(prev => prev.map(f => f.id === item.id ? { ...f, pages: pdf.numPages, status: 'done' } : f));
-                    } catch (e) {
-                        console.error(e);
-                        alert(`Error loading ${item.name}`);
-                        setFiles(prev => prev.filter(f => f.id !== item.id));
-                    }
+                    } catch (e) { alert(`Error loading ${item.name}`); setFiles(prev => prev.filter(f => f.id !== item.id)); }
                 }
             };
 
-            const openSelector = (id) => { const f = files.find(f => f.id === id); if (f) setModal({ open: true, fileId: id }); };
-            const saveSelection = (fileId, newSelection) => { setFiles(prev => prev.map(f => f.id === fileId ? { ...f, selectedPages: newSelection } : f)); };
-            const moveFile = (idx, direction) => {
-                if (direction === -1 && idx === 0) return;
-                if (direction === 1 && idx === files.length - 1) return;
-                const newFiles = [...files];
-                const temp = newFiles[idx];
-                newFiles[idx] = newFiles[idx + direction];
-                newFiles[idx + direction] = temp;
-                setFiles(newFiles);
-            };
-
             const handleSubmit = async () => {
-                if (files.some(f => f.status === 'loading')) return alert("Please wait for files to load");
-                if (files.length === 0) return alert("Queue is empty");
-                
+                if (files.some(f => f.status === 'loading')) return alert("Wait for files");
+                if (files.length === 0) return alert("Queue empty");
                 setIsProcessing(true);
-                // Allow UI to update before blocking with heavy work
+                setProgressStatus("Starting...");
+                
+                // Allow UI to render the overlay
                 setTimeout(async () => {
                     try {
-                        const resultBytes = await processPDF(files, settings);
+                        const resultBytes = await processPDF(files, settings, (msg) => setProgressStatus(msg));
                         const baseName = files[0].name.replace(/\.[^/.]+$/, "");
-                        
                         if (settings.separate_sheets) {
+                            setProgressStatus("Creating Zip...");
                             const { fronts, backs } = await processSplit(resultBytes);
                             const zip = new JSZip();
-                            zip.file("1_fronts.pdf", fronts);
-                            zip.file("2_backs.pdf", backs);
-                            zip.file("INSTRUCTIONS.txt", "1. Print fronts.\n2. Flip stack.\n3. Print backs.");
+                            zip.file("1_fronts.pdf", fronts); zip.file("2_backs.pdf", backs);
                             const content = await zip.generateAsync({type:"blob"});
                             download(content, `${baseName}_Kit.zip`, "application/zip");
                         } else {
+                            setProgressStatus("Downloading...");
                             download(resultBytes, `${baseName}_Processed.pdf`, "application/pdf");
                         }
-                    } catch (err) {
-                        console.error(err);
-                        alert("Error processing PDF: " + err.message);
-                    } finally {
-                        setIsProcessing(false);
-                    }
+                    } catch (err) { alert("Error: " + err.message); } finally { setIsProcessing(false); }
                 }, 100);
+            };
+            
+            // Drag and Drop Handlers
+            const onDragStart = (e, index) => {
+                setDraggedIdx(index);
+                e.dataTransfer.effectAllowed = "move";
+                // Hide default ghost image slightly
+                e.dataTransfer.setDragImage(e.target, 0, 0);
+            };
+
+            const onDragOver = (e, index) => {
+                e.preventDefault();
+                if (draggedIdx === null || draggedIdx === index) return;
+                const newFiles = [...files];
+                const draggedItem = newFiles[draggedIdx];
+                newFiles.splice(draggedIdx, 1);
+                newFiles.splice(index, 0, draggedItem);
+                setFiles(newFiles);
+                setDraggedIdx(index);
+            };
+
+            const onDragEnd = () => {
+                setDraggedIdx(null);
             };
             
             const activeFile = modal.fileId ? files.find(f => f.id === modal.fileId) : null;
 
             return (
                 <div className="min-h-screen p-6 md:p-12 max-w-6xl mx-auto transition-colors duration-300">
-                     <ProcessingOverlay isOpen={isProcessing} />
-                     {activeFile && <PageSelectorModal isOpen={modal.open} file={activeFile} onClose={() => setModal({ open: false, fileId: null })} onSave={(sel) => saveSelection(modal.fileId, sel)} />}
-                    
+                     <ProcessingOverlay isOpen={isProcessing} status={progressStatus} />
+                     {activeFile && <PageSelectorModal isOpen={modal.open} file={activeFile} onClose={() => setModal({ open: false, fileId: null })} onSave={(sel) => setFiles(prev => prev.map(f => f.id === modal.fileId ? { ...f, selectedPages: sel } : f))} />}
                     <header className="mb-10 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent mb-2">Slide2PDF <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded ml-2 align-middle border border-blue-200">STANDALONE</span></h1>
-                            <p className="text-gray-500 dark:text-slate-400">Secure Client-Side PDF Tools</p>
-                        </div>
-                        <button onClick={toggleTheme} className="p-3 rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-500 dark:text-slate-400">
-                             {theme === 'dark' ? <IconSun /> : <IconMoon />}
-                        </button>
+                        <div><h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent mb-2">Slide2PDF</h1></div>
+                        <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-3 rounded-full bg-white dark:bg-slate-800 border dark:border-slate-700">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
                     </header>
-
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2 space-y-6">
-                            <div className="border-2 border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800/30 rounded-xl p-8 text-center hover:bg-gray-50 dark:hover:bg-slate-800/50 transition relative">
+                            <div className="border-2 border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800/30 rounded-xl p-8 text-center relative hover:bg-gray-50 dark:hover:bg-slate-800/50 transition">
                                 <input type="file" multiple accept="application/pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFiles(e.target.files)} />
-                                <div className="flex flex-col items-center gap-4">
-                                    <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 dark:text-blue-400"><IconUpload /></div>
-                                    <p className="text-lg font-medium text-gray-700 dark:text-slate-200">Drag & Drop PDFs</p>
-                                </div>
+                                <div className="flex flex-col items-center gap-4"><div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500"><IconUpload /></div><p className="text-lg font-medium">Upload PDFs</p></div>
                             </div>
-                             <div className="flex gap-4">
+                            <div className="flex gap-4">
                                 <button onClick={() => setFiles(prev => [...prev, { id: Math.random().toString(), isVirtual: true, type: 'blank', name: 'Blank Page', pages: 1, status: 'done', selectedPages: 'all' }])} className="flex-1 py-3 px-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-2">
                                     <div className="w-4 h-4 border border-gray-300 rounded-sm"></div> Add Blank
                                 </button>
-                                <button onClick={() => {
-                                    const text = prompt("Enter text for page:", "Text Page");
-                                    if (text) setFiles(prev => [...prev, { id: Math.random().toString(), isVirtual: true, type: 'text', name: `Text: ${text}`, text: text, pages: 1, status: 'done', selectedPages: 'all' }]);
-                                }} className="flex-1 py-3 px-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-2">
-                                   Add Text
-                                </button>
+                                <button onClick={() => { const t = prompt("Text?"); if(t) setFiles(prev => [...prev, { id: Math.random().toString(), isVirtual: true, type: 'text', name: `Text: ${t}`, text: t, pages: 1, status: 'done', selectedPages: 'all' }]); }} className="flex-1 py-3 px-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition shadow-sm flex items-center justify-center gap-2">Add Text</button>
                             </div>
-
-                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden min-h-[300px] shadow-sm">
+                            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden min-h-[300px]">
                                 {files.length === 0 ? <div className="p-8 text-center text-gray-400 italic mt-10">Empty Queue</div> : 
                                     <div className="divide-y divide-gray-100 dark:divide-slate-800">{files.map((file, idx) => (
-                                        <div key={file.id} className="p-4 flex items-center gap-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition group">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <button onClick={() => moveFile(idx, -1)} disabled={idx === 0} className="text-gray-400 hover:text-blue-500 disabled:opacity-20"><IconArrowUp /></button>
-                                                <span className="w-8 text-center text-gray-400 font-mono text-xs">{idx+1}</span>
-                                                <button onClick={() => moveFile(idx, 1)} disabled={idx === files.length - 1} className="text-gray-400 hover:text-blue-500 disabled:opacity-20"><IconArrowDown /></button>
+                                        <div key={file.id} 
+                                             draggable={true}
+                                             onDragStart={(e) => onDragStart(e, idx)}
+                                             onDragOver={(e) => onDragOver(e, idx)}
+                                             onDragEnd={onDragEnd}
+                                             className={`p-4 flex items-center gap-4 bg-white dark:bg-slate-900 transition file-item ${draggedIdx === idx ? 'dragging bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'}`}>
+                                            <div className="flex flex-col items-center gap-1 text-gray-400">
+                                                <div className="cursor-grab hover:text-gray-600 active:cursor-grabbing"><IconGrip /></div>
+                                                <button onClick={() => moveFile(idx, -1)} disabled={idx === 0} className="hover:text-blue-500 disabled:opacity-20"><IconArrowUp/></button>
+                                                <span className="text-[10px] font-mono font-bold">{idx+1}</span>
+                                                <button onClick={() => moveFile(idx, 1)} disabled={idx === files.length - 1} className="hover:text-blue-500 disabled:opacity-20"><IconArrowDown/></button>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2"><p className="font-medium text-gray-800 dark:text-slate-200 truncate">{file.name}</p></div>
-                                                <p className="text-xs text-gray-500">{file.selectedPages === 'all' ? `All ${file.pages} pages` : `${file.selectedPages.length} selected`}</p>
-                                            </div>
-                                            {!file.isVirtual && <button onClick={() => openSelector(file.id)} className="px-3 py-1.5 text-xs font-bold bg-gray-100 dark:bg-slate-800 hover:bg-blue-600 text-blue-600 dark:text-blue-400 hover:text-white rounded border border-gray-200 dark:border-slate-700 transition flex items-center gap-2"><IconGrid /> Pages</button>}
-                                            <button onClick={() => setFiles(f => f.filter((_, i) => i !== idx))} className="p-2 text-gray-400 hover:text-red-500 transition"><IconTrash /></button>
+                                            <div className="flex-1 min-w-0"><p className="font-medium truncate">{file.name}</p><p className="text-xs text-gray-500">{file.pages} pages</p></div>
+                                            {!file.isVirtual && <button onClick={() => setModal({ open: true, fileId: file.id })} className="px-3 py-1.5 text-xs font-bold bg-gray-100 dark:bg-slate-800 rounded border transition flex items-center gap-2"><IconGrid /> Pages</button>}
+                                            <button onClick={() => setFiles(f => f.filter((_, i) => i !== idx))} className="p-2 hover:text-red-500"><IconTrash /></button>
                                         </div>
-                                    ))}
-                                </div>
-                                }
+                                    ))}</div>}
                             </div>
                         </div>
-
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-6 h-fit space-y-8 shadow-sm">
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Grid Settings</h2>
-                                <GridLayoutPreview settings={settings} />
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1"><label className="text-xs text-gray-400 mb-1 block">Columns</label><input type="number" min="1" max="10" value={settings.cols} onChange={e => setSettings({...settings, cols: parseInt(e.target.value) || 1})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2 text-center font-bold" /></div>
-                                        <span className="text-gray-400 pt-5">×</span>
-                                        <div className="flex-1"><label className="text-xs text-gray-400 mb-1 block">Rows</label><input type="number" min="1" max="10" value={settings.rows} onChange={e => setSettings({...settings, rows: parseInt(e.target.value) || 1})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2 text-center font-bold" /></div>
+                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-6 space-y-8">
+                            <div><h2 className="text-xl font-bold mb-4">Settings</h2><GridLayoutPreview settings={settings} />
+                                <div className="space-y-4">
+                                    <div className="flex justify-between gap-2">
+                                        {[
+                                            {l: '1x1', r: 1, c: 1}, 
+                                            {l: '1x2', r: 1, c: 2}, 
+                                            {l: '2x2', r: 2, c: 2}, 
+                                            {l: '3x3', r: 3, c: 3}
+                                        ].map(preset => (
+                                            <button key={preset.l} onClick={() => setSettings({...settings, rows: preset.r, cols: preset.c})} className="flex-1 py-1.5 text-xs font-bold bg-gray-100 dark:bg-slate-800 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-gray-600 dark:text-slate-300 rounded border border-gray-200 dark:border-slate-700 transition">{preset.l}</button>
+                                        ))}
                                     </div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase block mb-2">Orientation</label><select value={settings.orientation} onChange={(e) => setSettings({...settings, orientation: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2"><option value="auto">Auto</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></div>
-                                    <div><label className="text-xs font-bold text-gray-500 uppercase block mb-2">Rotation</label><select value={settings.rotate} onChange={(e) => setSettings({...settings, rotate: parseInt(e.target.value)})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2"><option value="0">0°</option><option value="90">90° CW</option><option value="180">180°</option><option value="270">270° CW</option></select></div>
-                                    
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1"><label className="text-xs text-gray-400 mb-1 block">Cols</label><input type="number" value={settings.cols} onChange={e => setSettings({...settings, cols: parseInt(e.target.value) || 1})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2 text-center" /></div>
+                                        <div className="flex-1"><label className="text-xs text-gray-400 mb-1 block">Rows</label><input type="number" value={settings.rows} onChange={e => setSettings({...settings, rows: parseInt(e.target.value) || 1})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2 text-center" /></div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-xs font-bold text-gray-500 uppercase">Orientation</label>
+                                            {settings.orientation === 'auto' && (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-bold">
+                                                    {(settings.cols > settings.rows) ? 'Auto: Landscape' : 'Auto: Portrait'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <select value={settings.orientation} onChange={(e) => setSettings({...settings, orientation: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2 text-sm font-medium">
+                                            <option value="auto">Auto (Smart Detect)</option>
+                                            <option value="portrait">Portrait</option>
+                                            <option value="landscape">Landscape</option>
+                                        </select>
+                                    </div>
+                                    <div><label className="text-xs font-bold block mb-2 uppercase">Rotation</label><select value={settings.rotate} onChange={(e) => setSettings({...settings, rotate: parseInt(e.target.value)})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2"><option value="0">0°</option><option value="90">90° CW</option><option value="180">180°</option><option value="270">270° CW</option></select></div>
+                                    <div><label className="text-xs font-bold block mb-2 uppercase">Fill Order</label><select value={settings.fill_direction || 'row'} onChange={(e) => setSettings({...settings, fill_direction: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded p-2"><option value="row">Horizontal (Z-Order)</option><option value="col">Vertical (N-Order)</option></select></div>
                                     <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-slate-800">
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.invert} onChange={() => setSettings({...settings, invert: !settings.invert})} /><span className="text-sm text-gray-600 dark:text-slate-300">Invert Colors (Slower)</span></label>
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.low_dpi} onChange={() => setSettings({...settings, low_dpi: !settings.low_dpi})} /><span className="text-sm text-gray-600 dark:text-slate-300">Low DPI (72dpi)</span></label>
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.border} onChange={() => setSettings({...settings, border: !settings.border})} /><span className="text-sm text-gray-600 dark:text-slate-300">Add Borders</span></label>
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.page_numbers} onChange={() => setSettings({...settings, page_numbers: !settings.page_numbers})} /><span className="text-sm text-gray-600 dark:text-slate-300">Add Page Numbers</span></label>
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.separator} onChange={() => setSettings({...settings, separator: !settings.separator})} /><span className="text-sm text-gray-600 dark:text-slate-300">Add Title Separators</span></label>
-                                         <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={settings.separate_sheets} onChange={() => setSettings({...settings, separate_sheets: !settings.separate_sheets})} /><span className="text-sm text-gray-600 dark:text-slate-300">Separate Fronts/Backs</span></label>
+                                         <label className="flex items-center gap-3"><input type="checkbox" checked={settings.invert} onChange={() => setSettings({...settings, invert: !settings.invert})} /><span>Invert</span></label>
+                                         <label className="flex items-center gap-3"><input type="checkbox" checked={settings.border} onChange={() => setSettings({...settings, border: !settings.border})} /><span>Borders</span></label>
+                                         <label className="flex items-center gap-3"><input type="checkbox" checked={settings.page_numbers} onChange={() => setSettings({...settings, page_numbers: !settings.page_numbers})} /><span>Page Numbers</span></label>
+                                         <label className="flex items-center gap-3"><input type="checkbox" checked={settings.separator} onChange={() => setSettings({...settings, separator: !settings.separator})} /><span>Add Title Separators</span></label>
+                                         <label className="flex items-center gap-3"><input type="checkbox" checked={settings.separate_sheets} onChange={() => setSettings({...settings, separate_sheets: !settings.separate_sheets})} /><span>Separate Front/Back</span></label>
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={handleSubmit} disabled={isProcessing} className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition disabled:opacity-50">
-                                {isProcessing ? 'Processing...' : 'Merge & Download PDF'}
-                            </button>
+                            <button onClick={handleSubmit} disabled={isProcessing} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition disabled:opacity-50">{isProcessing ? 'Processing...' : 'Merge & Download'}</button>
                         </div>
                     </div>
                 </div>
             );
         }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
