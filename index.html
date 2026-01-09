@@ -567,7 +567,10 @@
                      <ProcessingOverlay isOpen={isProcessing} status={progressStatus} />
                      {activeFile && <PageSelectorModal isOpen={modal.open} file={activeFile} onClose={() => setModal({ open: false, fileId: null })} onSave={(sel) => setFiles(prev => prev.map(f => f.id === modal.fileId ? { ...f, selectedPages: sel } : f))} />}
                     <header className="mb-10 flex items-center justify-between">
-                        <div><h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent mb-2">Slide2PDF</h1></div>
+                        <div>
+                            <h1 className="text-4xl font-extrabold bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent mb-2">Slide 2 Print</h1>
+                            <p className="text-gray-500 dark:text-slate-400">Visual PDF layouts for perfect prints.</p>
+                        </div>
                         <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="p-3 rounded-full bg-white dark:bg-slate-800 border dark:border-slate-700">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
                     </header>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
