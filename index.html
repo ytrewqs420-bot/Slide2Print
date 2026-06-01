@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slide 2 Print (Standalone)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' }</script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,700&display=swap');
+        :root {
+            --paper: #f7f9f8;
+            --ink: #17212b;
+            --muted: #657382;
+            --line: #dfe7ea;
+            --cyan: #0ea5b7;
+            --cyan-dark: #087b8b;
+            --orange: #f97316;
+            --green: #10b981;
+        }
+        body {
+            font-family: 'Manrope', sans-serif;
+            background:
+                linear-gradient(120deg, rgba(14, 165, 183, 0.08), transparent 34%),
+                linear-gradient(180deg, #fbfcfb 0%, var(--paper) 48%, #eef3f1 100%);
+            color: var(--ink);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .brand-serif { font-family: 'Newsreader', serif; }
+        .drag-active { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.05); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .file-item { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .file-item.dragging { opacity: 0.5; transform: scale(0.98); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--cyan); margin-top: -6px; box-shadow: 0 4px 12px rgba(14, 165, 183, 0.32); cursor: pointer; border: 3px solid white; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #dce7e9; border-radius: 2px; }
+        .dark input[type=range]::-webkit-slider-runnable-track { background: #334155; }
+        .studio-panel { background: rgba(255,255,255,0.84); border: 1px solid rgba(203, 213, 225, 0.78); box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08); backdrop-filter: blur(16px); }
+        .control-surface { background: #f8fbfa; border: 1px solid #e2eaed; }
+        .tool-shadow { box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08); }
+        .dark .studio-panel { background: rgba(15,23,42,0.86); border-color: rgba(51,65,85,0.9); }
+        .dark body { background: linear-gradient(120deg, rgba(14, 165, 183, 0.13), transparent 34%), #071018; }
+        .studio-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+        .pane-resizer { display: none; }
+        @media (min-width: 1024px) {
+            body { overflow: hidden; }
+            .app-shell { height: 100vh; overflow: hidden; }
+            .studio-grid {
+                grid-template-columns:
+                    minmax(280px, var(--left-pane, 330px))
+                    6px
+                    minmax(420px, 1fr)
+                    6px
+                    minmax(300px, var(--right-pane, 380px));
+                column-gap: 0.7rem;
+                align-items: start;
+                height: calc(100vh - 8.75rem);
+                overflow: hidden;
+            }
+            .workspace-pane {
+                min-height: 0;
+                max-height: calc(100vh - 8.75rem);
+                overflow: hidden;
+            }
+            .queue-panel {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+                height: clamp(260px, calc(100vh - 24rem), 420px);
+                max-height: calc(100vh - 24rem);
+            }
+            .queue-scroll {
+                min-height: 0;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+            }
+            .scrollable-pane {
+                min-height: 0;
+                max-height: calc(100vh - 8.75rem);
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+                padding-right: 2px;
+            }
+            .preview-scroll-pane {
+                min-height: 0;
+                max-height: calc(100vh - 8.75rem);
+                overflow-y: auto;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+                padding-right: 2px;
+            }
+            .pane-resizer {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 6px;
+                min-height: calc(100vh - 150px);
+                cursor: col-resize;
+                border-radius: 999px;
+                touch-action: none;
+            }
+            .pane-resizer::before {
+                content: "";
+                width: 2px;
+                height: 64px;
+                border-radius: 999px;
+                background: #cbd5e1;
+                transition: background 0.15s, height 0.15s, box-shadow 0.15s;
+            }
+            .pane-resizer:hover::before,
+            .pane-resizer.active::before {
+                height: 112px;
+                background: var(--cyan);
+                box-shadow: 0 0 0 4px rgba(14, 165, 183, 0.12);
+            }
+        }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://unpkg.com/downloadjs@1.4.7/download.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = null;</script>
+</head>
+<body class="text-slate-900 dark:text-slate-200 antialiased selection:bg-cyan-100 dark:selection:bg-cyan-900">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
+
+        const IconUpload = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+        const IconGrid = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+        const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+        const IconSun = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>;
+        const IconMoon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+        const IconGrip = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+        const IconEmpty = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 dark:text-slate-700"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+        const IconFile = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+        const IconLoader = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
+        const IconReorder = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>;
+        const IconLayout = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>;
+        const IconBook = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>;
+        const IconSettings = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+        const IconChevronDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+        const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
+        const IconCheckCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+        const IconInfo = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+
+        const formatFileSize = (bytes) => {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        };
+
+        const readFileAsync = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(file); });
+        const generateThumbnail = async (pdfDocProxy, pageNum) => {
+            const page = await pdfDocProxy.getPage(pageNum), viewport = page.getViewport({ scale: 0.2 }), canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+            canvas.height = viewport.height; canvas.width = viewport.width; await page.render({ canvasContext: ctx, viewport }).promise; return canvas.toDataURL();
+        };
+
+        const optimizeLightBackgrounds = (imageData) => {
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                const brightness = (r + g + b) / 3;
+                const minChannel = Math.min(r, g, b);
+                const maxChannel = Math.max(r, g, b);
+                const channelSpread = maxChannel - minChannel;
+                const isBrightTint = brightness >= 216 && minChannel >= 170;
+                const isYellowishPaper = brightness >= 205 && r >= 205 && g >= 195 && b >= 150 && r >= b && g >= b && channelSpread <= 90;
+                if (isBrightTint || isYellowishPaper) {
+                    data[i] = 255;
+                    data[i + 1] = 255;
+                    data[i + 2] = 255;
+                }
+            }
+        };
+
+        const canvasToJpegBytes = (canvas, quality = 0.82) => new Promise((resolve, reject) => {
+            canvas.toBlob(async (blob) => {
+                if (!blob) { reject(new Error('Could not rasterize page image.')); return; }
+                resolve(new Uint8Array(await blob.arrayBuffer()));
+            }, 'image/jpeg', quality);
+        });
+
+        const rasterizePage = async (pdfDocProxy, pageIndex, dpi = 150, invert = false, optimizeBackground = false) => {
+            const page = await pdfDocProxy.getPage(pageIndex + 1), scale = dpi / 72, viewport = page.getViewport({ scale }), canvas = document.createElement('canvas');
+            canvas.width = viewport.width; canvas.height = viewport.height; const ctx = canvas.getContext('2d'); await page.render({ canvasContext: ctx, viewport }).promise;
+            if (invert || optimizeBackground) {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height), data = imageData.data;
+                if (invert) {
+                    for (let i = 0; i < data.length; i += 4) { data[i] = 255 - data[i]; data[i + 1] = 255 - data[i + 1]; data[i + 2] = 255 - data[i + 2]; }
+                }
+                if (optimizeBackground) optimizeLightBackgrounds(imageData);
+                ctx.putImageData(imageData, 0, 0);
+            }
+            const bytes = await canvasToJpegBytes(canvas, dpi <= 96 ? 0.78 : 0.84);
+            canvas.width = 0; canvas.height = 0;
+            if (page.cleanup) page.cleanup();
+            return bytes;
+        };
+
+        const getRasterDpi = (settings, slotsPerSheet) => {
+            if (settings.low_dpi) return 72;
+            if (settings.workbook_mode) return slotsPerSheet >= 8 ? 96 : 110;
+            if (slotsPerSheet >= 8) return 105;
+            if (slotsPerSheet >= 4) return 120;
+            return 150;
+        };
+
+        const getProcessingConcurrency = (settings, type = 'raster') => {
+            const cpu = Math.max(1, Math.min(4, navigator.hardwareConcurrency || 2));
+            const mode = settings.performance_mode || 'balanced';
+            if (mode === 'safe') return 1;
+            if (mode === 'fast') return type === 'file' ? Math.min(3, cpu) : Math.min(2, cpu);
+            return Math.min(2, cpu);
+        };
+
+        const runLimited = async (items, limit, worker) => {
+            const results = new Array(items.length);
+            let nextIndex = 0;
+            const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+                while (nextIndex < items.length) {
+                    const current = nextIndex++;
+                    results[current] = await worker(items[current], current);
+                }
+            });
+            await Promise.all(runners);
+            return results;
+        };
+
+        const processPDF = async (files, settings, onProgress) => {
+            const loadedPDFFiles = {}; const loadedPDFBytes = {}; const loadedPDFProxies = {}; 
+            const useRaster = settings.invert || settings.low_dpi || settings.optimize_background;
+            const reportProgress = (message, current = null, total = null, base = 0, span = 100) => {
+                if (!onProgress) return;
+                const localPercent = total ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : null;
+                onProgress({
+                    message,
+                    current,
+                    total,
+                    percent: localPercent === null ? null : Math.max(0, Math.min(100, Math.round(base + (localPercent * span / 100))))
+                });
+            };
+            const reportPercent = (message, percent) => {
+                if (!onProgress) return;
+                onProgress({ message, current: null, total: null, percent: Math.max(0, Math.min(100, Math.round(percent))) });
+            };
+            reportProgress("Loading source files...", 0, Math.max(1, files.length), 0, 8);
+            for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                const f = files[fileIndex];
+                if (!f.isVirtual && !loadedPDFFiles[f.id]) {
+                    reportProgress(`Loading ${f.name || 'source file'}...`, fileIndex, Math.max(1, files.length), 0, 8);
+                    const ab = await readFileAsync(f.fileObj);
+                    if (useRaster) loadedPDFBytes[f.id] = ab;
+                    loadedPDFFiles[f.id] = await PDFDocument.load(ab);
+                    reportProgress(`Loaded ${f.name || 'source file'}...`, fileIndex + 1, Math.max(1, files.length), 0, 8);
+                }
+            }
+            const ensurePDFProxy = async (docId) => {
+                if (!loadedPDFProxies[docId]) loadedPDFProxies[docId] = await pdfjsLib.getDocument(loadedPDFBytes[docId].slice(0)).promise;
+                return loadedPDFProxies[docId];
+            };
+            reportPercent("Calculating layout...", 9);
+            const pageMap = [];
+            const addNoteToMap = (mode) => {
+                if (settings.workbook_mode) {
+                    if (settings.workbook_position === 'before') return mode === 'before' ? { type: 'notes' } : null;
+                    return mode === 'after' ? { type: 'notes' } : null;
+                }
+                return null;
+            };
+            for (const item of files) {
+                if (item.isVirtual) { pageMap.push({ type: item.type, text: item.text }); continue; }
+                const srcDoc = loadedPDFFiles[item.id], count = srcDoc.getPageCount();
+                if (settings.separator) pageMap.push({ type: 'separator', text: item.name });
+                if (settings.separate_sheets) pageMap.push({ type: 'new_sheet' });
+                const selection = item.selectedPages === 'all' ? Array.from({length: count}, (_, i) => ({type: 'page', index: i})) : item.selectedPages;
+                for (const s of selection) {
+                    if (s.type === 'page') {
+                        const b = addNoteToMap('before'); if (b) pageMap.push(b);
+                        pageMap.push({ ...s, docId: item.id });
+                        const a = addNoteToMap('after'); if (a) pageMap.push(a);
+                    } else pageMap.push(s);
+                }
+            }
+            const outDoc = await PDFDocument.create(), font = await outDoc.embedFont(StandardFonts.Helvetica);
+            const rows = parseInt(settings.rows || 1), cols = parseInt(settings.cols || 1), n_up = rows * cols;
+            const rasterDpi = getRasterDpi(settings, n_up);
+            const rasterCache = new Map();
+            if (useRaster) {
+                const uniqueRasterItems = [];
+                const seenRasterItems = new Set();
+                pageMap.forEach((item) => {
+                    if (item.type !== 'page') return;
+                    const key = `${item.docId}:${item.index}`;
+                    if (seenRasterItems.has(key)) return;
+                    seenRasterItems.add(key);
+                    uniqueRasterItems.push({ docId: item.docId, index: item.index, key });
+                });
+                const rasterConcurrency = getProcessingConcurrency(settings, 'raster');
+                reportProgress(`Preparing page images with ${rasterConcurrency} lane${rasterConcurrency > 1 ? 's' : ''}...`, 0, Math.max(1, uniqueRasterItems.length), 10, 54);
+                await runLimited(uniqueRasterItems, rasterConcurrency, async (item, itemIndex) => {
+                    const proxy = await ensurePDFProxy(item.docId);
+                    const bytes = await rasterizePage(proxy, item.index, rasterDpi, settings.invert, settings.optimize_background);
+                    rasterCache.set(item.key, bytes);
+                    reportProgress(`Prepared ${itemIndex + 1} of ${uniqueRasterItems.length} page images...`, itemIndex + 1, Math.max(1, uniqueRasterItems.length), 10, 54);
+                });
+            }
+            let pw = 595.28, ph = 841.89; if (settings.orientation === 'landscape' || (settings.orientation === 'auto' && cols > rows)) { pw = 841.89; ph = 595.28; }
+            const margin = parseInt(settings.page_margin || 0), padding = parseInt(settings.cell_padding || 0);
+            const usableW = pw - (margin * 2), usableH = ph - (margin * 2);
+            const split = (settings.workbook_split || 50) / 100, noteSplit = 1 - split;
+            const colWidths = Array(cols).fill(usableW / cols), rowHeights = Array(rows).fill(usableH / rows);
+            if (settings.workbook_mode) {
+                const dir = settings.workbook_direction === 'auto' ? (cols % 2 === 0 && cols > 1 ? 'vertical' : 'horizontal') : settings.workbook_direction;
+                if (dir === 'vertical' && cols > 1) { const sW = (usableW/(cols/2))*split, nW = (usableW/(cols/2))*noteSplit; for(let c=0; c<cols; c++) colWidths[c] = (settings.workbook_position==='before' ? c%2!==0 : c%2===0) ? sW : nW; }
+                else if (dir === 'horizontal' && rows > 1) { const sH = (usableH/(rows/2))*split, nH = (usableH/(rows/2))*noteSplit; for(let r=0; r<rows; r++) rowHeights[r] = (settings.workbook_position==='before' ? r%2!==0 : r%2===0) ? sH : nH; }
+            }
+            let currentOutPage = null, gridIndex = 0, sheetCount = 0;
+            const drawPageNum = (page, num, pageW, pageH) => {
+                 const text = String(num), size = 12, textWidth = font.widthOfTextAtSize(text, size);
+                 let x = (pageW - textWidth) / 2, y = 30;
+                 if (settings.pagenum_pos === 'bottom_right') { x = pageW - textWidth - 30; y = 30; }
+                 else if (settings.pagenum_pos === 'top_right') { x = pageW - textWidth - 30; y = pageH - 40; }
+                 else if (settings.pagenum_pos === 'top_center') { x = (pageW - textWidth) / 2; y = pageH - 40; }
+                 [[-1,-1], [-1,1], [1,-1], [1,1], [0,-1], [0,1], [-1,0], [1,0]].forEach(([dx, dy]) => { page.drawText(text, { x: x + (dx*0.5), y: y + (dy*0.5), size, font, color: rgb(1,1,1) }); });
+                 page.drawText(text, { x, y, size, font, color: rgb(0,0,0) });
+            };
+            for (let i = 0; i < pageMap.length; i++) {
+                if (i % 2 === 0) { reportProgress(`Assembling ${i + 1} of ${pageMap.length}...`, i + 1, pageMap.length, useRaster ? 64 : 10, useRaster ? 32 : 86); await new Promise(r => setTimeout(r, 0)); }
+                const item = pageMap[i];
+                if (item.type === 'new_sheet') {
+                    if (gridIndex > 0) { if (settings.page_numbers && currentOutPage) drawPageNum(currentOutPage, sheetCount, pw, ph); gridIndex = 0; }
+                    continue;
+                }
+                if (item.type === 'separator') {
+                    if (gridIndex > 0) { if (settings.page_numbers && currentOutPage) drawPageNum(currentOutPage, sheetCount, pw, ph); gridIndex = 0; }
+                    const sepPage = outDoc.addPage([pw, ph]); sheetCount++;
+                    sepPage.drawText(item.text || "Separator", { x: 50, y: ph/2, size: parseInt(settings.separator_size || 36), font });
+                    if (settings.page_numbers) drawPageNum(sepPage, sheetCount, pw, ph); continue;
+                }
+                if (gridIndex === 0) { currentOutPage = outDoc.addPage([pw, ph]); sheetCount++; }
+                let c, r; if (settings.fill_direction === 'col') { r = gridIndex % rows; c = Math.floor(gridIndex / rows); } else { c = gridIndex % cols; r = Math.floor(gridIndex / cols); }
+                let x = margin; for (let k = 0; k < c; k++) x += colWidths[k];
+                let yT = margin; for (let k = 0; k < r; k++) yT += rowHeights[k];
+                const cw = colWidths[c], rh = rowHeights[r], y = ph - yT - rh;
+                const innerCW = cw - (padding * 2), innerRH = rh - (padding * 2), innerX = x + padding, innerY = y + padding;
+                if (item.type === 'page') {
+                    const rotationDeg = parseInt(settings.rotate || 0), isSideRotation = rotationDeg === 90 || rotationDeg === 270;
+                    if (useRaster) {
+                        const imgData = rasterCache.get(`${item.docId}:${item.index}`), img = await outDoc.embedJpg(imgData);
+                        const iW = isSideRotation ? img.height : img.width, iH = isSideRotation ? img.width : img.height, sc = Math.min(innerCW / iW, innerRH / iH);
+                        currentOutPage.drawImage(img, { x: innerX + (innerCW - (isSideRotation ? img.height : img.width) * sc) / 2 + (isSideRotation ? (rotationDeg === 90 ? 0 : img.height * sc) : 0), y: innerY + (innerRH - (isSideRotation ? img.width : img.height) * sc) / 2 + (isSideRotation ? (rotationDeg === 90 ? img.width * sc : 0) : 0), width: img.width * sc, height: img.height * sc, rotation: degrees(rotationDeg) });
+                    } else {
+                        const [emb] = await outDoc.embedPages([loadedPDFFiles[item.docId].getPages()[item.index]]);
+                        const pW = isSideRotation ? emb.height : emb.width, pH = isSideRotation ? emb.width : emb.height, sc = Math.min(innerCW / pW, innerRH / pH);
+                        currentOutPage.drawPage(emb, { x: innerX + (innerCW - (isSideRotation ? emb.height : emb.width) * sc) / 2 + (isSideRotation ? (rotationDeg === 90 ? 0 : emb.height * sc) : 0), y: innerY + (innerRH - (isSideRotation ? emb.width : emb.height) * sc) / 2 + (isSideRotation ? (rotationDeg === 90 ? emb.width * sc : 0) : 0), width: emb.width * sc, height: emb.height * sc, rotation: degrees(rotationDeg) });
+                    }
+                } else if (item.type === 'notes') {
+                    const m = 20; 
+                    if (settings.workbook_header) {
+                        currentOutPage.drawText(settings.workbook_header, { x: innerX + m, y: innerY + innerRH - m - 15, size: 14, font, color: rgb(0.4, 0.4, 0.4) });
+                    }
+                    const sY = innerY + innerRH - m - (settings.workbook_header ? 40 : 10), eY = innerY + m, sp = 25, style = settings.workbook_style || 'lined';
+                    const lines = Math.floor((sY - eY) / sp);
+                    for (let l = 0; l <= lines; l++) { 
+                        const ly = sY - (l * sp);
+                        if (style === 'lined' || style === 'dashed') {
+                            currentOutPage.drawLine({ start: { x: innerX + m, y: ly }, end: { x: innerX + innerCW - m, y: ly }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7), dashArray: style === 'dashed' ? [3, 3] : undefined });
+                        } else if (style === 'grid') {
+                            currentOutPage.drawLine({ start: { x: innerX + m, y: ly }, end: { x: innerX + innerCW - m, y: ly }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+                        } else if (style === 'dots') {
+                            for (let dx = innerX + m; dx <= innerX + innerCW - m; dx += sp) {
+                                currentOutPage.drawCircle({ x: dx, y: ly, size: 0.8, color: rgb(0.7, 0.7, 0.7) });
+                            }
+                        }
+                    }
+                    if (style === 'grid') {
+                        for (let dx = innerX + m; dx <= innerX + innerCW - m; dx += sp) {
+                            currentOutPage.drawLine({ start: { x: dx, y: sY }, end: { x: dx, y: sY - (lines * sp) }, thickness: 0.5, color: rgb(0.8, 0.8, 0.8) });
+                        }
+                    }
+                }
+                if (settings.border) currentOutPage.drawRectangle({ x: innerX, y: innerY, width: innerCW, height: innerRH, borderWidth: 1, borderColor: rgb(0,0,0), opacity: 0, borderOpacity: (settings.border_opacity || 100) / 100 });
+                gridIndex++; if (gridIndex >= n_up) { if (settings.page_numbers) drawPageNum(currentOutPage, sheetCount, pw, ph); gridIndex = 0; }
+            }
+            if (gridIndex > 0 && settings.page_numbers && currentOutPage) drawPageNum(currentOutPage, sheetCount, pw, ph);
+            reportPercent("Saving PDF...", 98);
+            const outputBytes = await outDoc.save();
+            await Promise.all(Object.values(loadedPDFProxies).map(proxy => proxy.destroy ? proxy.destroy() : Promise.resolve()));
+            return outputBytes;
+        };
+
+        const splitForManualDuplex = async (pdfBytes, options = {}) => {
+            const { reverseBackPages = true, padToEven = true } = options;
+            const srcDoc = await PDFDocument.load(pdfBytes);
+
+            if (padToEven && srcDoc.getPageCount() % 2 !== 0) {
+                const lastPage = srcDoc.getPage(srcDoc.getPageCount() - 1);
+                const { width, height } = lastPage.getSize();
+                srcDoc.addPage([width, height]);
+            }
+
+            const frontDoc = await PDFDocument.create();
+            const backDoc = await PDFDocument.create();
+            const frontIndexes = [];
+            const backIndexes = [];
+
+            for (let i = 0; i < srcDoc.getPageCount(); i++) {
+                if (i % 2 === 0) frontIndexes.push(i);
+                else backIndexes.push(i);
+            }
+
+            const orderedBackIndexes = reverseBackPages ? [...backIndexes].reverse() : backIndexes;
+
+            if (frontIndexes.length > 0) {
+                const frontPages = await frontDoc.copyPages(srcDoc, frontIndexes);
+                frontPages.forEach((page) => frontDoc.addPage(page));
+            }
+
+            if (orderedBackIndexes.length > 0) {
+                const backPages = await backDoc.copyPages(srcDoc, orderedBackIndexes);
+                backPages.forEach((page) => backDoc.addPage(page));
+            }
+
+            return {
+                front: await frontDoc.save(),
+                back: await backDoc.save(),
+                sourcePages: srcDoc.getPageCount(),
+                frontPages: frontIndexes.length,
+                backPages: orderedBackIndexes.length
+            };
+        };
+
+        const addManualDuplexInstructions = (zip, namePrefix, splitMeta, reverseBackPages) => {
+            const instructions = [
+                'Manual duplex print guide',
+                '=========================',
+                '',
+                `File set: ${namePrefix}`,
+                `Total prepared pages: ${splitMeta.sourcePages}`,
+                `Front pages file: ${namePrefix}-front.pdf (${splitMeta.frontPages} pages)`,
+                `Back pages file: ${namePrefix}-back.pdf (${splitMeta.backPages} pages)`,
+                '',
+                'Steps:',
+                '1) Print the FRONT PDF first (all pages, normal order).',
+                '2) Reinsert printed stack according to your printer feed path.',
+                `3) Print the BACK PDF (${reverseBackPages ? 'reversed order' : 'normal order'}).`,
+                '4) If orientation is wrong, toggle "Reverse back pages" and retry.'
+            ].join('\n');
+
+            zip.file(`${namePrefix}-instructions.txt`, instructions);
+        };
+
+        const createPageSelectionItem = (index) => ({
+            type: 'page',
+            index,
+            id: Math.random().toString(36).substr(2, 9)
+        });
+
+        const normalizeSelectedPages = (sequence, pageCount) => {
+            const pages = sequence.filter(s => s.type === 'page');
+            if (pages.length !== pageCount) return sequence;
+            for (let i = 0; i < pageCount; i++) {
+                if (pages[i].index !== i) return sequence;
+            }
+            return 'all';
+        };
+
+        const parsePageRangeInput = (input, pageCount) => {
+            const raw = input.trim().toLowerCase();
+            if (!raw) return { error: 'Enter pages like 1, 4-8, 12.' };
+            if (raw === 'all') return { pages: Array.from({ length: pageCount }, (_, i) => i) };
+            const parts = raw.split(/[,\s]+/).filter(Boolean), seen = new Set(), pages = [];
+            for (const part of parts) {
+                const match = part.match(/^(\d+|last)(?:-(\d+|last))?$/);
+                if (!match) return { error: `Could not read "${part}". Use numbers or ranges like 3-7.` };
+                const toIndex = (value) => value === 'last' ? pageCount - 1 : Number(value) - 1;
+                let start = toIndex(match[1]), end = match[2] ? toIndex(match[2]) : start;
+                if (start < 0 || end < 0 || start >= pageCount || end >= pageCount) {
+                    return { error: `Pages must be between 1 and ${pageCount}.` };
+                }
+                const step = start <= end ? 1 : -1;
+                for (let i = start; step > 0 ? i <= end : i >= end; i += step) {
+                    if (!seen.has(i)) { seen.add(i); pages.push(i); }
+                }
+            }
+            return { pages };
+        };
+
+        function PageSelectorModal({ isOpen, file, onClose, onSave }) {
+            const [thumbnails, setThumbnails] = useState([]), [sequence, setSequence] = useState([]), [rangeInput, setRangeInput] = useState(''), [rangeMode, setRangeMode] = useState('exclude'), [rangeError, setRangeError] = useState(''), [thumbnailLimit, setThumbnailLimit] = useState(96);
+            const selectedIndexes = useMemo(() => new Set(sequence.filter(s => s.type === 'page').map(s => s.index)), [sequence]);
+            useEffect(() => {
+                if (isOpen && file) {
+                    let seq = (file.selectedPages === 'all') ? Array.from({length: file.pages}, (_, i) => createPageSelectionItem(i)) : file.selectedPages.map(s => s.id ? s : { ...s, id: Math.random().toString(36).substr(2, 9) });
+                    const limit = Math.min(file.pages || 96, 96);
+                    setSequence(seq); (async () => {
+                        setThumbnails([]);
+                        setThumbnailLimit(limit);
+                        setRangeInput('');
+                        setRangeError('');
+                        try { const ab = await readFileAsync(file.fileObj), pdf = await pdfjsLib.getDocument(ab).promise, ts = [];
+                            for(let i=1; i<=Math.min(pdf.numPages, limit); i++) ts.push({ index: i-1, src: await generateThumbnail(pdf, i) }); setThumbnails(ts);
+                        } catch(e) { console.error(e); }
+                    })();
+                }
+            }, [isOpen, file]);
+            if (!isOpen) return null;
+            const applyRange = () => {
+                const parsed = parsePageRangeInput(rangeInput, file.pages);
+                if (parsed.error) { setRangeError(parsed.error); return; }
+                const rangeSet = new Set(parsed.pages);
+                setSequence(prev => {
+                    if (rangeMode === 'include') return parsed.pages.map(createPageSelectionItem);
+                    return prev.filter(s => s.type !== 'page' || !rangeSet.has(s.index));
+                });
+                setRangeError('');
+            };
+            const loadMoreThumbnails = async () => {
+                const nextLimit = Math.min(file.pages, thumbnailLimit + 96);
+                try {
+                    const ab = await readFileAsync(file.fileObj), pdf = await pdfjsLib.getDocument(ab).promise, next = [...thumbnails];
+                    for(let i=thumbnailLimit + 1; i<=nextLimit; i++) next.push({ index: i-1, src: await generateThumbnail(pdf, i) });
+                    setThumbnails(next);
+                    setThumbnailLimit(nextLimit);
+                } catch(e) { console.error(e); }
+            };
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 text-slate-800" role="dialog" aria-modal="true">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-6xl h-[90vh] rounded-2xl border border-gray-200 dark:border-slate-700 flex flex-col shadow-2xl overflow-hidden">
+                        <div className="p-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
+                            <h3 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2"><IconGrid /> Custom Sequence: {file.name}</h3>
+                            <button onClick={onClose} aria-label="Close modal" className="text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white"><IconX /></button>
+                        </div>
+                        <div className="border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                                <div className="flex-1">
+                                    <label className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Page ranges</label>
+                                    <input value={rangeInput} onChange={e => setRangeInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') applyRange(); }} placeholder="Example: 1, 4-8, 12, last" className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" />
+                                </div>
+                                <div className="grid grid-cols-2 rounded-lg border border-slate-200 bg-slate-50 p-1 text-xs font-extrabold dark:border-slate-700 dark:bg-slate-950">
+                                    <button onClick={() => setRangeMode('exclude')} className={`rounded-md px-3 py-2 ${rangeMode === 'exclude' ? 'bg-orange-500 text-white' : 'text-slate-500 dark:text-slate-300'}`}>Exclude</button>
+                                    <button onClick={() => setRangeMode('include')} className={`rounded-md px-3 py-2 ${rangeMode === 'include' ? 'bg-cyan-600 text-white' : 'text-slate-500 dark:text-slate-300'}`}>Include only</button>
+                                </div>
+                                <button onClick={applyRange} className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-extrabold text-white hover:bg-cyan-700 dark:bg-white dark:text-slate-950">Apply</button>
+                                <button onClick={() => { setSequence(Array.from({length: file.pages}, (_, i) => createPageSelectionItem(i))); setRangeError(''); }} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:border-cyan-400 dark:border-slate-700 dark:text-slate-300">All</button>
+                                <button onClick={() => { setSequence([]); setRangeError(''); }} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:border-orange-400 dark:border-slate-700 dark:text-slate-300">None</button>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <p className={`${rangeError ? 'text-orange-600 dark:text-orange-300' : 'text-slate-500 dark:text-slate-400'}`}>{rangeError || `${selectedIndexes.size} of ${file.pages} pages selected.`}</p>
+                                <p className="font-semibold text-slate-400">Click thumbnails for quick toggles; range tools work across the whole PDF.</p>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-slate-950">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
+                                {thumbnails.map((ts) => {
+                                    const isSel = selectedIndexes.has(ts.index);
+                                    return (
+                                        <div key={ts.index} className="flex flex-col gap-2">
+                                            <button 
+                                                 onClick={() => setSequence(p => isSel ? p.filter(s => !(s.type === 'page' && s.index === ts.index)) : [...p, createPageSelectionItem(ts.index)])} 
+                                                 aria-label={`Page ${ts.index + 1}${isSel ? ', selected' : ''}`}
+                                                 className={`relative cursor-pointer group rounded-lg overflow-hidden border-2 transition-all ${isSel ? 'border-cyan-500 shadow-lg' : 'border-gray-200 dark:border-slate-800 opacity-60'}`}>
+                                                <div className="aspect-[1/1.4] bg-white dark:bg-slate-900"><img src={ts.src} alt={`Thumbnail of page ${ts.index + 1}`} className="w-full h-full object-contain" /></div>
+                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${isSel ? 'bg-cyan-500' : 'bg-black/50'}`}>{ts.index+1}</div>
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                            {thumbnailLimit < file.pages && (
+                                <div className="mt-6 flex justify-center">
+                                    <button onClick={loadMoreThumbnails} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-600 hover:border-cyan-400 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">Load more thumbnails</button>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end gap-3">
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900">Cancel</button>
+                            <button onClick={() => { onSave(normalizeSelectedPages(sequence, file.pages)); onClose(); }} className="px-6 py-2 text-sm font-bold bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg shadow-lg">Save Selection</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function VisualPreview({ settings, file }) {
+            const canvasRef = useRef(null); const [thumb, setThumb] = useState(null);
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (!file) return;
+                (async () => {
+                    try { const ab = await readFileAsync(file.fileObj), pdf = await pdfjsLib.getDocument(ab).promise, p = await pdf.getPage(1);
+                        const v = p.getViewport({ scale: 0.5 }), c = document.createElement('canvas');
+                        c.width = v.width; c.height = v.height; await p.render({ canvasContext: c.getContext('2d'), viewport: v }).promise; setThumb(c);
+                    } catch(e) { console.error("Preview error:", e); }
+                })();
+            }, [file.id]);
+            useEffect(() => {
+                if (!canvasRef.current || !containerRef.current) return;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const containerWidth = containerRef.current.clientWidth - 32; // subtracting padding
+                const isLandscape = settings.orientation === 'landscape' || (settings.orientation === 'auto' && settings.cols > settings.rows);
+                const aspectRatio = isLandscape ? 0.707 : 1.414;
+                canvas.width = containerWidth;
+                canvas.height = containerWidth * aspectRatio;
+                const w = canvas.width, h = canvas.height;
+
+                ctx.fillStyle = "white"; ctx.fillRect(0, 0, w, h);
+                const { rows, cols, workbook_mode, workbook_split, workbook_position, workbook_direction, page_margin, cell_padding, border_opacity } = settings;
+                const margin = (page_margin || 0) * (w / 595.28), padding = (cell_padding || 0) * (w / 595.28);
+                const usableW = w - (margin * 2), usableH = h - (margin * 2);
+                const cWs = Array(cols).fill(usableW/cols), rHs = Array(rows).fill(usableH/rows), s = workbook_split/100, ns = 1-s;
+                if (workbook_mode) {
+                    const dir = workbook_direction === 'auto' ? (cols % 2 === 0 && cols > 1 ? 'vertical' : 'horizontal') : workbook_direction;
+                    if (dir === 'vertical' && cols > 1) { const sw = (usableW/(cols/2))*s, nw = (usableW/(cols/2))*ns; for(let i=0; i<cols; i++) cWs[i] = (workbook_position==='before' ? i%2!==0 : i%2===0) ? sw : nw; }
+                    else if (dir === 'horizontal' && rows > 1) { const sh = (usableH/(rows/2))*s, nh = (usableH/(rows/2))*ns; for(let i=0; i<rows; i++) rHs[i] = (workbook_position==='before' ? i%2!==0 : i%2===0) ? sh : nh; }
+                }
+                let idx = 0, curY = margin;
+                for (let r=0; r<rows; r++) {
+                    let curX = margin; const rh = rHs[r];
+                    for (let c=0; c<cols; c++) {
+                        const cw = cWs[c]; 
+                        const dir = workbook_direction === 'auto' ? (cols % 2 === 0 && cols > 1 ? 'vertical' : 'horizontal') : workbook_direction;
+                        let isN = false;
+                        if (workbook_mode) {
+                            if (dir === 'vertical') isN = (c % 2 !== 0 && workbook_position === 'after') || (c % 2 === 0 && workbook_position === 'before');
+                            else isN = (r % 2 !== 0 && workbook_position === 'after') || (r % 2 === 0 && workbook_position === 'before');
+                        }
+                        const iCW = cw - (padding * 2), iRH = rh - (padding * 2), iX = curX + padding, iY = curY + padding;
+                        if (settings.border) { ctx.strokeStyle = `rgba(0,0,0,${(border_opacity||100)/100})`; ctx.lineWidth = 0.5; ctx.strokeRect(iX, iY, iCW, iRH); }
+                        if (isN) {
+                            ctx.fillStyle = "#f8fafc"; ctx.fillRect(iX+0.5, iY+0.5, iCW-1, iRH-1);
+                            if (settings.workbook_header) {
+                                ctx.fillStyle = "#94a3b8"; ctx.font = `bold ${Math.max(6, w/50)}px Inter, sans-serif`; ctx.fillText(settings.workbook_header, iX+5, iY+15);
+                            }
+                            const m = 5, sp = Math.max(4, w/60), sY = iY + (settings.workbook_header ? 20 : 10), eY = iY + iRH - m, style = settings.workbook_style || 'lined';
+                            ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 0.3;
+                            if (style === 'dashed') ctx.setLineDash([2, 2]); else ctx.setLineDash([]);
+                            if (style === 'lined' || style === 'dashed' || style === 'grid') {
+                                ctx.beginPath();
+                                for (let ly = sY; ly < eY; ly += sp) { ctx.moveTo(iX + m, ly); ctx.lineTo(iX + iCW - m, ly); }
+                                if (style === 'grid') { for (let dx = iX + m; dx < iX + iCW - m; dx += sp) { ctx.moveTo(dx, sY); ctx.lineTo(dx, eY - ((eY-sY)%sp)); } }
+                                ctx.stroke();
+                            } else if (style === 'dots') {
+                                ctx.fillStyle = "#cbd5e1";
+                                for (let ly = sY; ly < eY; ly += sp) { for (let dx = iX + m; dx < iX + iCW - m; dx += sp) { ctx.beginPath(); ctx.arc(dx, ly, 0.5, 0, Math.PI * 2); ctx.fill(); } }
+                            }
+                            ctx.setLineDash([]);
+                        } else if (thumb) {
+                            const sc = Math.min(iCW/thumb.width, iRH/thumb.height);
+                            ctx.drawImage(thumb, iX+(iCW-thumb.width*sc)/2, iY+(iRH-thumb.height*sc)/2, thumb.width*sc, thumb.height*sc);
+                        }
+                        curX += cw; idx++;
+                    }
+                    curY += rh;
+                }
+            }, [settings, thumb]);
+            return <div className="mb-6" ref={containerRef}><label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Sheet Preview</label><div className="bg-gray-100 p-4 rounded-xl flex justify-center"><canvas ref={canvasRef} className="bg-white shadow-lg border border-gray-200" /></div></div>;
+        }
+
+        function GridLayoutPreview({ settings }) {
+            const { rows, cols, workbook_mode, workbook_split, workbook_position, workbook_direction } = settings;
+            const s = workbook_split, ns = 100 - s;
+            let gC = `repeat(${cols}, 1fr)`, gR = `repeat(${rows}, 1fr)`;
+            if (workbook_mode) {
+                const dir = workbook_direction === 'auto' ? (cols % 2 === 0 && cols > 1 ? 'vertical' : 'horizontal') : workbook_direction;
+                if (dir === 'vertical' && cols > 1) gC = Array(cols/2).fill(workbook_position === 'before' ? `${ns}% ${s}%` : `${s}% ${ns}%`).join(' ');
+                else if (dir === 'horizontal' && rows > 1) gR = Array(rows/2).fill(workbook_position === 'before' ? `${ns}% ${s}%` : `${s}% ${ns}%`).join(' ');
+            }
+            const cells = []; for (let i=0; i<rows*cols; i++) {
+                const dir = workbook_direction === 'auto' ? (cols % 2 === 0 && cols > 1 ? 'vertical' : 'horizontal') : workbook_direction;
+                let isN = false;
+                if (workbook_mode) {
+                    if (dir === 'vertical') { const c = i % cols; isN = (c % 2 !== 0 && workbook_position === 'after') || (c % 2 === 0 && workbook_position === 'before'); }
+                    else { const r = Math.floor(i / cols); isN = (r % 2 !== 0 && workbook_position === 'after') || (r % 2 === 0 && workbook_position === 'before'); }
+                }
+                cells.push(<div key={i} className={`border flex items-center justify-center text-[10px] font-bold ${isN ? 'bg-gray-100 text-gray-400' : 'bg-cyan-50 text-cyan-600 border-cyan-200'}`}>{isN ? "" : (Math.floor(i/(workbook_mode?2:1))+1)}</div>);
+            }
+            const isLandscape = settings.orientation === 'landscape' || (settings.orientation === 'auto' && settings.cols > settings.rows);
+            return <div className="mb-6"><label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Layout Preview</label><div className="bg-gray-100 p-4 rounded-xl flex justify-center"><div className={`bg-white grid gap-1 p-1 w-full border border-gray-200 ${isLandscape ? 'aspect-[1.41/1]' : 'aspect-[1/1.41] max-w-[300px]'}`} style={{ gridTemplateColumns: gC, gridTemplateRows: gR }}>{cells}</div></div></div>;
+        }
+
+        const PRESETS = {
+            '1x1duplex': { rows: 1, cols: 1, orientation: 'portrait', workbook_mode: false, page_numbers: false, invert: false, manual_duplex_split: true, manual_duplex_reverse_back: true, manual_duplex_pad_even: true, manual_duplex_instructions: true, output_split: 'single' },
+            '2up': { rows: 1, cols: 2, orientation: 'landscape', workbook_mode: false },
+            '4up': { rows: 2, cols: 2, orientation: 'landscape', workbook_mode: false },
+            '6up': { rows: 2, cols: 3, orientation: 'landscape', workbook_mode: false },
+            '4x2workbook': { rows: 4, cols: 2, orientation: 'portrait', workbook_mode: true, workbook_split: 65, workbook_style: 'dots', workbook_position: 'after', workbook_direction: 'auto', page_numbers: true, invert: true, manual_duplex_split: true, manual_duplex_reverse_back: true, manual_duplex_pad_even: true, manual_duplex_instructions: true, output_split: 'single' },
+            'workbook': { rows: 1, cols: 2, orientation: 'landscape', workbook_mode: true, workbook_split: 60, workbook_position: 'after' },
+            'handout': { rows: 3, cols: 2, orientation: 'portrait', workbook_mode: false, page_margin: 10, cell_padding: 5 }
+        };
+        const DEFAULT_SETTINGS = { rows: 1, cols: 2, orientation: "landscape", rotate: 0, fill_direction: 'row', invert: false, optimize_background: false, low_dpi: false, border: false, page_numbers: false, separator: false, separate_sheets: false, workbook_mode: false, workbook_style: 'lined', workbook_position: 'after', workbook_header: '', workbook_split: 50, workbook_direction: 'auto', page_margin: 0, cell_padding: 0, border_opacity: 100, pagenum_pos: 'bottom_center', separator_size: 36, output_split: 'single', manual_duplex_split: false, manual_duplex_reverse_back: true, manual_duplex_pad_even: true, manual_duplex_instructions: true, performance_mode: 'balanced' };
+        const PRESET_EXPORT_NAMES = {
+            '1x1duplex': '1x1-print',
+            '2up': '2-up',
+            '4up': '4-up',
+            '6up': '6-up',
+            '4x2workbook': '4x2-workbook',
+            'workbook': 'workbook',
+            'handout': 'handout'
+        };
+        const PRESET_LABELS = {
+            '1x1duplex': '1x1 Print',
+            '2up': '2-up',
+            '4up': '4-up',
+            '6up': '6-up',
+            '4x2workbook': '4x2 Workbook',
+            'workbook': 'Workbook',
+            'handout': 'Handout'
+        };
+        const CUSTOM_PRESETS_KEY = 'slide2print.customPresets.v1';
+        const sanitizeFilePart = (value, fallback = 'slide2print') => {
+            const cleaned = String(value || '')
+                .replace(/\.pdf$/i, '')
+                .replace(/[<>:"/\\|?*\x00-\x1F]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 80);
+            return cleaned || fallback;
+        };
+        const shortFilePart = (value, maxLength = 32) => sanitizeFilePart(value)
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .slice(0, maxLength)
+            .replace(/-+$/g, '');
+        const createPresetId = (name) => `custom-${sanitizeFilePart(name, 'preset').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${Date.now().toString(36)}`;
+        const layoutSlug = (settings, activePreset) => {
+            if (PRESET_EXPORT_NAMES[activePreset]) return PRESET_EXPORT_NAMES[activePreset];
+            const base = `${settings.cols}x${settings.rows}`;
+            return settings.workbook_mode ? `${base}-workbook` : `${base}-up`;
+        };
+
+        function Tooltip({ text, children }) {
+            const [show, setShow] = useState(false);
+            return (
+                <div className="relative inline-flex items-center" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+                    {children}
+                    {show && <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-800 text-white text-xs rounded-lg whitespace-nowrap z-50 shadow-lg">{text}<div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div></div>}
+                </div>
+            );
+        }
+
+        function CollapsibleSection({ title, icon: Icon, children, defaultOpen = false, openWhen = false }) {
+            const [isOpen, setIsOpen] = useState(defaultOpen);
+            useEffect(() => { if (openWhen) setIsOpen(true); }, [openWhen]);
+            return (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white/70 dark:bg-slate-900/70">
+                    <button onClick={() => setIsOpen(!isOpen)} className="w-full px-4 py-3 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/50 hover:bg-cyan-50 dark:hover:bg-slate-800 transition-colors">
+                        <div className="flex items-center gap-2"><Icon /><span className="font-bold text-sm">{title}</span></div>
+                        {isOpen ? <IconChevronDown /> : <IconChevronRight />}
+                    </button>
+                    {isOpen && <div className="p-4 space-y-4">{children}</div>}
+                </div>
+            );
+        }
+
+        function Toggle({ checked, onChange, label, hint }) {
+            return (
+                <label className="group flex items-start gap-3 cursor-pointer">
+                    <span className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-cyan-600' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                        <input type="checkbox" checked={checked} onChange={onChange} className="sr-only" />
+                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-xs font-extrabold leading-5 text-slate-700 dark:text-slate-200 group-hover:text-cyan-700 dark:group-hover:text-cyan-300">{label}</span>
+                        {hint && <span className="block text-[10px] leading-4 text-slate-400">{hint}</span>}
+                    </span>
+                </label>
+            );
+        }
+
+        function FieldLabel({ children, value }) {
+            return <label className="mb-1.5 flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wide text-slate-400"><span>{children}</span>{value && <span>{value}</span>}</label>;
+        }
+
+        function SegmentedControl({ value, options, onChange }) {
+            return (
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                    {options.map((opt) => (
+                        <button key={opt.value} onClick={() => onChange(opt.value)} className={`rounded-md px-2 py-2 text-[11px] font-extrabold transition ${value === opt.value ? 'bg-white text-cyan-700 shadow-sm dark:bg-slate-700 dark:text-cyan-300' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            );
+        }
+
+        function Stepper({ label, value, min, max, onChange }) {
+            return (
+                <div>
+                    <FieldLabel>{label}</FieldLabel>
+                    <div className="flex h-11 items-center rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+                        <button onClick={() => onChange(Math.max(min, value - 1))} className="h-full w-9 text-lg font-bold text-slate-400 hover:text-cyan-700">-</button>
+                        <input type="number" min={min} max={max} value={value} onChange={e => onChange(Math.min(max, Math.max(min, parseInt(e.target.value)||min)))} className="h-full min-w-0 flex-1 bg-transparent text-center text-lg font-extrabold outline-none" />
+                        <button onClick={() => onChange(Math.min(max, value + 1))} className="h-full w-9 text-lg font-bold text-slate-400 hover:text-cyan-700">+</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function RailButton({ active, icon: Icon, label }) {
+            return (
+                <Tooltip text={label}>
+                    <button className={`grid h-11 w-11 place-items-center rounded-lg transition ${active ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-white'}`} aria-label={label}>
+                        <Icon />
+                    </button>
+                </Tooltip>
+            );
+        }
+
+        function App() {
+            const [files, setFiles] = useState([]), [settings, setSettings] = useState(DEFAULT_SETTINGS);
+            const [isProcessing, setIsProcessing] = useState(false), [status, setStatus] = useState(""), [progress, setProgress] = useState(0), [modal, setModal] = useState({ open: false, fileId: null }), [theme, setTheme] = useState('light');
+            const [isDragging, setIsDragging] = useState(false);
+            const [draggedFile, setDraggedFile] = useState(null);
+            const [paneSizes, setPaneSizes] = useState({ left: 330, right: 380 });
+            const [resizingPane, setResizingPane] = useState(null);
+            const resizeRef = useRef(null);
+            const [activePreset, setActivePreset] = useState('2up');
+            const [customPresets, setCustomPresets] = useState(() => {
+                try {
+                    const saved = JSON.parse(localStorage.getItem(CUSTOM_PRESETS_KEY) || '[]');
+                    return Array.isArray(saved) ? saved.filter(p => p && p.id && p.name && p.settings) : [];
+                } catch(e) {
+                    return [];
+                }
+            });
+            const [presetName, setPresetName] = useState('');
+            const [showSuccess, setShowSuccess] = useState(false);
+            const fileInputRef = useRef(null);
+            const activeOptionLabels = [
+                settings.invert && 'Invert',
+                settings.optimize_background && 'Optimize bg',
+                settings.border && 'Borders',
+                settings.page_numbers && 'Page nums',
+                settings.separator && 'Separators',
+                settings.separate_sheets && 'Split files',
+                settings.manual_duplex_split && 'Manual duplex',
+                settings.low_dpi && 'Fast mode',
+                settings.performance_mode === 'safe' && 'Safe processing',
+                settings.performance_mode === 'fast' && 'Parallel fast'
+            ].filter(Boolean);
+            const builtinPresetButtons = [
+                { key: '1x1duplex', label: PRESET_LABELS['1x1duplex'], icon: IconGrid },
+                { key: '2up', label: PRESET_LABELS['2up'], icon: IconGrid },
+                { key: '4up', label: PRESET_LABELS['4up'], icon: IconGrid },
+                { key: '6up', label: PRESET_LABELS['6up'], icon: IconGrid },
+                { key: '4x2workbook', label: PRESET_LABELS['4x2workbook'], icon: IconBook },
+                { key: 'workbook', label: PRESET_LABELS['workbook'], icon: IconBook },
+                { key: 'handout', label: PRESET_LABELS['handout'], icon: IconLayout }
+            ];
+            const allPresets = useMemo(() => {
+                const saved = {};
+                customPresets.forEach(p => { saved[p.id] = p.settings; });
+                return { ...PRESETS, ...saved };
+            }, [customPresets]);
+            const estimateSheetCount = () => {
+                const rows = Math.max(1, parseInt(settings.rows || 1));
+                const cols = Math.max(1, parseInt(settings.cols || 1));
+                const slotsPerSheet = rows * cols;
+                const slotsPerPage = settings.workbook_mode ? 2 : 1;
+                let sheets = 0;
+                let occupiedSlots = 0;
+                const flushSheet = () => {
+                    if (occupiedSlots > 0) {
+                        sheets++;
+                        occupiedSlots = 0;
+                    }
+                };
+                const addSlots = (count) => {
+                    for (let i = 0; i < count; i++) {
+                        if (occupiedSlots >= slotsPerSheet) flushSheet();
+                        occupiedSlots++;
+                    }
+                };
+
+                files.forEach((file) => {
+                    if (settings.separator) {
+                        flushSheet();
+                        sheets++;
+                    }
+                    if (settings.separate_sheets) flushSheet();
+                    const selectedCount = file.selectedPages === 'all' ? file.pages : file.selectedPages.length;
+                    addSlots(selectedCount * slotsPerPage);
+                });
+                flushSheet();
+                return sheets;
+            };
+            const sheetEstimate = Math.ceil(estimateSheetCount() / 2);
+            const getExportNames = () => {
+                const layout = layoutSlug(settings, activePreset);
+                const firstBase = shortFilePart(files[0]?.name, 42);
+                const batchBase = files.length === 1 ? firstBase : `slide2print-${files.length}files`;
+                return {
+                    layout,
+                    batchBase,
+                    singlePdf: `${batchBase}-${layout}.pdf`,
+                    singleZip: `${batchBase}-${layout}-duplex.zip`,
+                    perFileZip: `${batchBase}-${layout}.zip`,
+                    entryBase: (file, index) => `${String(index + 1).padStart(2, '0')}-${shortFilePart(file.name, 28)}`,
+                    frontName: 'front.pdf',
+                    backName: 'back.pdf',
+                    instructionsName: 'instructions.txt'
+                };
+            };
+
+            useEffect(() => { document.documentElement.classList.toggle('dark', theme === 'dark'); }, [theme]);
+            useEffect(() => {
+                localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresets));
+            }, [customPresets]);
+            useEffect(() => {
+                if (!resizingPane) return;
+                const handleMove = (e) => {
+                    const drag = resizeRef.current;
+                    if (!drag) return;
+                    const dx = e.clientX - drag.startX;
+                    setPaneSizes({
+                        left: drag.pane === 'left' ? Math.min(520, Math.max(280, drag.startLeft + dx)) : drag.startLeft,
+                        right: drag.pane === 'right' ? Math.min(560, Math.max(300, drag.startRight - dx)) : drag.startRight
+                    });
+                };
+                const handleUp = () => {
+                    resizeRef.current = null;
+                    setResizingPane(null);
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                };
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                window.addEventListener('mousemove', handleMove);
+                window.addEventListener('mouseup', handleUp);
+                return () => {
+                    window.removeEventListener('mousemove', handleMove);
+                    window.removeEventListener('mouseup', handleUp);
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                };
+            }, [resizingPane]);
+
+            const applyPreset = (presetKey) => {
+                const preset = allPresets[presetKey];
+                if (preset) {
+                    setSettings({ ...DEFAULT_SETTINGS, ...preset });
+                    setActivePreset(presetKey);
+                }
+            };
+
+            const saveCustomPreset = () => {
+                const name = presetName.trim();
+                if (!name) return;
+                const nextPreset = {
+                    id: createPresetId(name),
+                    name,
+                    settings: { ...settings }
+                };
+                setCustomPresets(prev => [nextPreset, ...prev]);
+                setPresetName('');
+                setActivePreset(nextPreset.id);
+            };
+
+            const deleteCustomPreset = (presetId) => {
+                setCustomPresets(prev => prev.filter(p => p.id !== presetId));
+                if (activePreset === presetId) setActivePreset('custom');
+            };
+
+            const updateProcessingProgress = (progressEvent, offset = 0, span = 100) => {
+                const event = typeof progressEvent === 'string' ? { message: progressEvent, percent: null } : progressEvent;
+                if (event.message) setStatus(event.message);
+                if (typeof event.percent === 'number') {
+                    setProgress(Math.max(0, Math.min(100, Math.round(offset + (event.percent * span / 100)))));
+                }
+            };
+
+            const handleFiles = async (list) => {
+                const news = Array.from(list).map(f => ({ id: Math.random().toString(36).substr(2, 9), fileObj: f, name: f.name, size: f.size, pages: 0, status: 'loading', selectedPages: 'all' }));
+                setFiles(p => [...p, ...news]);
+                for (let n of news) { 
+                    try { 
+                        const ab = await readFileAsync(n.fileObj), pdf = await pdfjsLib.getDocument(ab).promise; 
+                        setFiles(p => p.map(f => f.id === n.id ? { ...f, pages: pdf.numPages, status: 'done' } : f)); 
+                    } catch(e) { 
+                        alert(`Error loading ${n.name}: ${e.message}`); 
+                        setFiles(p => p.filter(f => f.id !== n.id)); 
+                    } 
+                }
+            };
+
+            const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+            const handleDragLeave = (e) => { e.preventDefault(); setIsDragging(false); };
+            const handleDrop = (e) => { e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files); };
+
+            const handleFileDragStart = (e, fileId) => { setDraggedFile(fileId); e.dataTransfer.effectAllowed = 'move'; };
+            const handleFileDragOver = (e, targetId) => { 
+                e.preventDefault(); 
+                if (draggedFile && draggedFile !== targetId) {
+                    setFiles(prev => {
+                        const fromIndex = prev.findIndex(f => f.id === draggedFile);
+                        const toIndex = prev.findIndex(f => f.id === targetId);
+                        if (fromIndex === -1 || toIndex === -1) return prev;
+                        const newFiles = [...prev];
+                        const [moved] = newFiles.splice(fromIndex, 1);
+                        newFiles.splice(toIndex, 0, moved);
+                        return newFiles;
+                    });
+                }
+            };
+
+            const cancelProcessing = () => { setIsProcessing(false); setStatus("Cancelled"); };
+            const startPaneResize = (pane, e) => {
+                e.preventDefault();
+                resizeRef.current = {
+                    pane,
+                    startX: e.clientX,
+                    startLeft: paneSizes.left,
+                    startRight: paneSizes.right
+                };
+                setResizingPane(pane);
+            };
+
+            return (
+                <div className="app-shell min-h-screen p-3 md:p-5 max-w-[1600px] mx-auto transition-colors">
+                    {isProcessing && (
+                        <div className="fixed inset-0 z-[100] bg-white/95 dark:bg-slate-950/95 flex flex-col items-center justify-center p-4 text-center">
+                            <div className="w-full max-w-md space-y-6">
+                                <div className="w-16 h-16 border-4 border-cyan-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                <div>
+                                    <h2 className="text-2xl font-bold mb-2">{status}</h2>
+                                    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                                        <div className="bg-cyan-600 h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                                    </div>
+                                    <p className="text-sm text-gray-500 mt-2">{progress}% complete</p>
+                                </div>
+                                <button onClick={cancelProcessing} className="px-6 py-2 text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-red-500 border border-gray-300 dark:border-slate-600 rounded-xl transition-colors">Cancel</button>
+                            </div>
+                        </div>
+                    )}
+                    {showSuccess && (
+                        <div className="fixed top-4 right-4 z-[100] bg-green-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right">
+                            <IconCheckCircle />
+                            <div>
+                                <p className="font-bold">Download Complete!</p>
+                                <p className="text-sm opacity-90">Your file is ready</p>
+                            </div>
+                            <button onClick={() => setShowSuccess(false)} className="ml-2 opacity-70 hover:opacity-100"><IconX /></button>
+                        </div>
+                    )}
+                    {modal.open && <PageSelectorModal isOpen={modal.open} file={files.find(f => f.id === modal.fileId)} onClose={() => setModal({ open: false, fileId: null })} onSave={(sel) => setFiles(p => p.map(f => f.id === modal.fileId ? { ...f, selectedPages: sel } : f))} />}
+                    <header className="mb-5 studio-panel rounded-xl px-5 py-4 flex flex-col gap-4 md:flex-row md:justify-between md:items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="grid h-12 w-12 place-items-center rounded-lg bg-slate-950 text-white dark:bg-white dark:text-slate-950"><IconGrid /></div>
+                            <div>
+                                <p className="text-[11px] font-extrabold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Print Studio</p>
+                                <h1 className="brand-serif text-3xl md:text-4xl font-bold leading-none text-slate-950 dark:text-white">Slide 2 Print</h1>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-3 py-1.5 rounded-full text-xs font-extrabold ring-1 ${files.length > 0 && !files.some(f => f.status === 'loading') ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>{files.length > 0 && !files.some(f => f.status === 'loading') ? 'Ready to export' : 'Waiting for PDFs'}</span>
+                            <span className="px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-500 dark:text-slate-300">{files.length} files</span>
+                            <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:shadow-lg transition-all">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
+                        </div>
+                    </header>
+                    <div
+                        className="studio-grid"
+                        style={{ '--left-pane': `${paneSizes.left}px`, '--right-pane': `${paneSizes.right}px` }}
+                    >
+                        <div className="workspace-pane space-y-5" style={{ order: 5 }}>
+                            <div 
+                                onDragOver={handleDragOver} 
+                                onDragLeave={handleDragLeave} 
+                                onDrop={handleDrop}
+                                className={`group studio-panel border-2 border-dashed rounded-xl p-10 text-center relative transition-all cursor-pointer ${isDragging ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 scale-[1.01]' : 'border-slate-200 dark:border-slate-800 hover:border-cyan-400 hover:shadow-md'}`}
+                            >
+                                <input ref={fileInputRef} type="file" multiple accept="application/pdf" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={e => handleFiles(e.target.files)} />
+                                <div className={`w-16 h-16 rounded-lg flex items-center justify-center mx-auto mb-4 transition-all ${isDragging ? 'bg-cyan-600 text-white' : 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300'}`}>
+                                    {isDragging ? <IconCheck /> : <IconUpload />}
+                                </div>
+                                <p className="text-xl font-black">{isDragging ? 'Drop PDFs here' : 'Drop PDFs here'}</p>
+                                <p className="text-sm text-slate-400 mt-1">Drag and drop or click to browse. PDF files only</p>
+                            </div>
+                            <div className="studio-panel queue-panel rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+                                    <div><p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Files</p><h2 className="text-lg font-extrabold">Document queue</h2></div>
+                                    <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-extrabold text-slate-500">{files.length} PDFs</span>
+                                </div>
+                                {files.length === 0 ? (
+                                    <div className="queue-scroll p-20 text-center text-gray-400">
+                                        <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+                                            <IconFile />
+                                        </div>
+                                        <p className="font-bold text-lg">No files yet</p>
+                                        <p className="text-sm mt-2">Upload PDF files to get started</p>
+                                    </div>
+                                ) : (
+                                    <div className="queue-scroll p-3 space-y-2">{files.map((f, i) => (
+                                        <div 
+                                            key={f.id} 
+                                            draggable
+                                            onDragStart={(e) => handleFileDragStart(e, f.id)}
+                                            onDragOver={(e) => handleFileDragOver(e, f.id)}
+                                            onDragEnd={() => setDraggedFile(null)}
+                                            className={`p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center gap-4 group hover:border-cyan-300 hover:bg-cyan-50/60 dark:hover:bg-cyan-950/20 transition-colors cursor-move ${draggedFile === f.id ? 'opacity-50' : ''}`}
+                                        >
+                                            <div className="text-gray-400"><IconReorder /></div>
+                                            <div className="w-10 h-12 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-[10px] font-black text-cyan-700">PDF</div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold truncate text-slate-800 dark:text-slate-200" title={f.name}>{f.name}</p>
+                                                <p className="text-xs text-gray-500 flex items-center gap-2">
+                                                    {f.status === 'loading' ? (
+                                                        <><span className="inline-flex items-center gap-1"><IconLoader /> Loading...</span></>
+                                                    ) : (
+                                                        <>{f.pages} pages / {formatFileSize(f.size)}</>
+                                                    )}
+                                                    {f.selectedPages !== 'all' && <span className="text-cyan-500 font-bold">/ Filtered</span>}
+                                                </p>
+                                            </div>
+                                            {!f.isVirtual && f.status === 'done' && <button onClick={() => setModal({open:true, fileId:f.id})} className="px-3 py-2 text-xs font-bold bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-cyan-600 hover:text-white transition shadow-sm whitespace-nowrap">Edit</button>}
+                                            <button onClick={() => setFiles(p => p.filter(x => x.id !== f.id))} aria-label={`Remove ${f.name}`} className="p-2 text-gray-300 hover:text-red-500 transition rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"><IconTrash /></button>
+                                        </div>
+                                    ))}</div>
+                                )}
+                            </div>
+                        </div>
+                        <div
+                            className={`pane-resizer ${resizingPane === 'right' ? 'active' : ''}`}
+                            style={{ order: 4 }}
+                            onMouseDown={(e) => startPaneResize('right', e)}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize preview and files panes"
+                            title="Drag to resize panes"
+                        ></div>
+
+                        <div className="preview-scroll-pane space-y-5" style={{ order: 3 }}>
+                            <div className="studio-panel rounded-xl p-5">
+                                <div className="mb-4 flex items-center justify-between">
+                                    <div><p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">Preview</p><h2 className="text-lg font-extrabold">Live paper canvas</h2></div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="rounded-lg border border-cyan-100 bg-cyan-50 px-3 py-1.5 text-right dark:border-cyan-900 dark:bg-cyan-950/40">
+                                            <span className="block text-[10px] font-extrabold uppercase tracking-wide text-cyan-600 dark:text-cyan-300">Sheets</span>
+                                            <span className="block text-sm font-black text-cyan-800 dark:text-cyan-100">{sheetEstimate}</span>
+                                        </div>
+                                        <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-extrabold text-slate-500">{settings.cols} x {settings.rows}</span>
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border border-slate-200 bg-[radial-gradient(circle_at_1px_1px,#d9e4e6_1px,transparent_0)] bg-[length:18px_18px] p-4 dark:border-slate-800 dark:bg-slate-950">
+                                    {files.length > 0 ? <VisualPreview settings={settings} file={files[0]} /> : <GridLayoutPreview settings={settings} />}
+                                </div>
+                            </div>
+                            <div className="studio-panel rounded-xl p-3">
+                                <div className="grid grid-cols-2 gap-2 text-xs font-bold text-slate-500 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-lg bg-white p-3 dark:bg-slate-950"><span className="block text-[10px] uppercase text-slate-400">Layout</span>{settings.cols} cols x {settings.rows} rows</div>
+                                    <div className="rounded-lg bg-white p-3 dark:bg-slate-950"><span className="block text-[10px] uppercase text-slate-400">Mode</span>{settings.workbook_mode ? 'Workbook' : 'Slides only'}</div>
+                                    <div className="rounded-lg bg-white p-3 dark:bg-slate-950"><span className="block text-[10px] uppercase text-slate-400">Quality</span>{settings.low_dpi ? 'Fast 72 DPI' : '150 DPI'}</div>
+                                    <div className="rounded-lg bg-white p-3 dark:bg-slate-950"><span className="block text-[10px] uppercase text-slate-400">Export</span>{settings.manual_duplex_split ? 'Duplex ZIP' : settings.output_split === 'single' ? 'Single PDF' : 'Per-file ZIP'}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            className={`pane-resizer ${resizingPane === 'left' ? 'active' : ''}`}
+                            style={{ order: 2 }}
+                            onMouseDown={(e) => startPaneResize('left', e)}
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Resize controls and preview panes"
+                            title="Drag to resize panes"
+                        ></div>
+
+                        <div className="scrollable-pane space-y-5" style={{ order: 1 }}>
+                            <div className="studio-panel rounded-xl p-5 space-y-5">
+                                <div className="space-y-4">
+                                    <label className="text-xs font-bold text-gray-500 uppercase">Quick Presets</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {builtinPresetButtons.map(({ key, label, icon: Icon }) => (
+                                            <button
+                                                key={key}
+                                                onClick={() => applyPreset(key)}
+                                                className={`flex flex-col items-center gap-1 p-3 rounded-xl transition-all border ${activePreset === key ? 'bg-cyan-50 text-cyan-700 border-cyan-300 shadow-sm ring-2 ring-cyan-100 dark:bg-cyan-950/40 dark:text-cyan-200 dark:border-cyan-700 dark:ring-cyan-900' : 'bg-gray-50 dark:bg-slate-800 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-600 border-transparent hover:border-cyan-200 dark:hover:border-cyan-800'}`}
+                                                aria-pressed={activePreset === key}
+                                            >
+                                                <Icon />
+                                                <span className="text-[10px] font-bold">{label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+                                    <div className="mb-3 flex items-center justify-between">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">My presets</span>
+                                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold text-slate-500 dark:bg-slate-800">{customPresets.length}</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            value={presetName}
+                                            onChange={e => setPresetName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') saveCustomPreset(); }}
+                                            placeholder="Preset name"
+                                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 dark:border-slate-700 dark:bg-slate-900"
+                                        />
+                                        <button onClick={saveCustomPreset} disabled={!presetName.trim()} className="inline-flex items-center gap-1 rounded-lg bg-slate-950 px-3 py-2 text-xs font-extrabold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:bg-white dark:text-slate-950 dark:disabled:bg-slate-700 dark:disabled:text-slate-400">
+                                            <IconPlus />
+                                            Save
+                                        </button>
+                                    </div>
+                                    {customPresets.length ? (
+                                        <div className="mt-3 space-y-2">
+                                            {customPresets.map(preset => (
+                                                <div key={preset.id} className={`flex items-center gap-2 rounded-lg border p-2 transition ${activePreset === preset.id ? 'border-cyan-300 bg-cyan-50 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-100' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900'}`}>
+                                                    <button onClick={() => applyPreset(preset.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                                                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"><IconSettings /></span>
+                                                        <span className="min-w-0">
+                                                            <span className="block truncate text-xs font-extrabold">{preset.name}</span>
+                                                            <span className="block text-[10px] font-bold text-slate-400">{preset.settings.cols} x {preset.settings.rows}{preset.settings.workbook_mode ? ' workbook' : ' slides'}</span>
+                                                        </span>
+                                                    </button>
+                                                    <button onClick={() => deleteCustomPreset(preset.id)} aria-label={`Delete ${preset.name}`} className="rounded-md p-2 text-slate-300 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"><IconTrash /></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="mt-3 text-xs font-bold text-slate-400">Save your current settings to reuse them later.</p>
+                                    )}
+                                </div>
+
+                                <div className="rounded-xl border border-slate-200 bg-white/70 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Active options</span>
+                                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold text-slate-500 dark:bg-slate-800">{activeOptionLabels.length}</span>
+                                    </div>
+                                    {activeOptionLabels.length ? (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {activeOptionLabels.map(label => <span key={label} className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-extrabold text-cyan-700 ring-1 ring-cyan-100 dark:bg-cyan-950/50 dark:text-cyan-200 dark:ring-cyan-900">{label}</span>)}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs font-bold text-slate-400">No extra options enabled</p>
+                                    )}
+                                </div>
+
+                                <div className="space-y-4">
+                                    <CollapsibleSection title="Layout" icon={IconLayout} defaultOpen={true}>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Cols</label><input type="number" min="1" max="6" value={settings.cols} onChange={e => setSettings({...settings, cols: Math.min(6, Math.max(1, parseInt(e.target.value)||1))})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-xl font-bold" /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Rows</label><input type="number" min="1" max="6" value={settings.rows} onChange={e => setSettings({...settings, rows: Math.min(6, Math.max(1, parseInt(e.target.value)||1))})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-xl font-bold" /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Sheet</label><select value={settings.orientation} onChange={e => setSettings({...settings, orientation: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-2 h-[54px] text-[10px] font-bold"><option value="auto">Auto</option><option value="landscape">Land.</option><option value="portrait">Port.</option></select></div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Fill order</label><select value={settings.fill_direction || 'row'} onChange={e => setSettings({...settings, fill_direction: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 h-[44px] text-xs font-bold"><option value="row">Rows first</option><option value="col">Columns first</option></select></div>
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Rotate slides</label><select value={settings.rotate} onChange={e => setSettings({...settings, rotate: parseInt(e.target.value)})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 h-[44px] text-xs font-bold"><option value="0">0 deg</option><option value="90">90 deg</option><option value="180">180 deg</option><option value="270">270 deg</option></select></div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-6 pt-2">
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase flex justify-between mb-2"><span>Margin</span><span>{settings.page_margin}pt</span></label><input type="range" min="0" max="50" value={settings.page_margin} onChange={e => setSettings({...settings, page_margin: parseInt(e.target.value)})} className="w-full" /></div>
+                                            <div><label className="text-[10px] font-bold text-gray-400 uppercase flex justify-between mb-2"><span>Padding</span><span>{settings.cell_padding}pt</span></label><input type="range" min="0" max="30" value={settings.cell_padding} onChange={e => setSettings({...settings, cell_padding: parseInt(e.target.value)})} className="w-full" /></div>
+                                        </div>
+                                    </CollapsibleSection>
+
+                                    <CollapsibleSection title="Workbook Mode" icon={IconBook} openWhen={settings.workbook_mode}>
+                                        <div className="space-y-4">
+                                            <label className="flex items-center gap-3 cursor-pointer">
+                                                <div className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.workbook_mode ? 'bg-cyan-600' : 'bg-gray-200 dark:bg-slate-700'}`}>
+                                                    <input type="checkbox" checked={settings.workbook_mode} onChange={() => setSettings({...settings, workbook_mode: !settings.workbook_mode})} className="sr-only" />
+                                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.workbook_mode ? 'translate-x-6' : 'translate-x-1'}`}></span>
+                                                </div>
+                                                <span className="font-bold text-sm">Enable Workbook Mode</span>
+                                                <Tooltip text="Adds note-taking space next to each slide"><span className="text-gray-400"><IconInfo /></span></Tooltip>
+                                            </label>
+                                            {settings.workbook_mode && <div className="space-y-4 pt-2">
+                                                <div><label className="text-[10px] font-bold text-gray-400 uppercase flex justify-between mb-2"><span>Slide Space</span><span>{settings.workbook_split}%</span></label>
+                                                <input type="range" min="20" max="80" value={settings.workbook_split} onChange={e => setSettings({...settings, workbook_split: parseInt(e.target.value)})} className="w-full" /></div>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Style</label><select value={settings.workbook_style} onChange={e => setSettings({...settings, workbook_style: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold"><option value="lined">Lined</option><option value="dashed">Dashed</option><option value="grid">Grid</option><option value="dots">Dots</option></select></div>
+                                                    <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Pos.</label><select value={settings.workbook_position} onChange={e => setSettings({...settings, workbook_position: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold"><option value="after">After</option><option value="before">Before</option></select></div>
+                                                    <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Split</label><select value={settings.workbook_direction} onChange={e => setSettings({...settings, workbook_direction: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-xs font-bold"><option value="auto">Auto</option><option value="vertical">Vert.</option><option value="horizontal">Horiz.</option></select></div>
+                                                </div>
+                                                <div><label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Header (optional)</label><input type="text" value={settings.workbook_header} onChange={e => setSettings({...settings, workbook_header: e.target.value})} placeholder="e.g., Notes" className="w-full bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl p-3 text-sm" /></div>
+                                            </div>}
+                                        </div>
+                                    </CollapsibleSection>
+
+                                    <CollapsibleSection title="Performance" icon={IconSettings} openWhen={settings.performance_mode !== 'balanced'}>
+                                        <div className="space-y-3">
+                                            <SegmentedControl
+                                                value={settings.performance_mode || 'balanced'}
+                                                options={[
+                                                    { value: 'safe', label: 'Safe' },
+                                                    { value: 'balanced', label: 'Balanced' },
+                                                    { value: 'fast', label: 'Fast' }
+                                                ]}
+                                                onChange={(value) => setSettings({...settings, performance_mode: value})}
+                                            />
+                                            <div className="grid grid-cols-3 gap-2 text-[10px] font-bold text-slate-500">
+                                                <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-950"><span className="block text-slate-400">Safe</span>1 lane</div>
+                                                <div className="rounded-lg bg-cyan-50 p-2 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-200"><span className="block text-cyan-500">Balanced</span>2 lanes</div>
+                                                <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-950"><span className="block text-slate-400">Fast</span>2-3 lanes</div>
+                                            </div>
+                                            <p className="text-[10px] leading-4 text-slate-400">Balanced is tuned for this PC. Use Safe for very large PDFs; Fast may help short per-file batches but uses more memory.</p>
+                                        </div>
+                                    </CollapsibleSection>
+
+                                    <CollapsibleSection title="Options" icon={IconSettings} defaultOpen={true} openWhen={true}>
+                                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400">Currently enabled</span>
+                                                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-slate-500 dark:bg-slate-800">{activeOptionLabels.length}</span>
+                                            </div>
+                                            {activeOptionLabels.length ? (
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {activeOptionLabels.map(label => <span key={label} className="rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-extrabold text-cyan-700 ring-1 ring-cyan-100 dark:bg-cyan-950/50 dark:text-cyan-200 dark:ring-cyan-900">{label}</span>)}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs font-bold text-slate-400">No extra options enabled</p>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {[
+                                                { k: 'invert', l: 'Invert colors', t: 'Invert slide colors for dark backgrounds' },
+                                                { k: 'optimize_background', l: 'Optimize background', t: 'Normalize light slide backgrounds to white in exported pages', s: 'Bright tints and yellowish paper become white.' },
+                                                { k: 'border', l: 'Show borders', t: 'Add borders around each cell' },
+                                                { k: 'page_numbers', l: 'Page numbers', t: 'Add page numbers to output' },
+                                                { k: 'separator', l: 'File separators', t: 'Add separator pages between files' },
+                                                { k: 'separate_sheets', l: 'Split files', t: 'Start each file on a new sheet' },
+                                                { k: 'manual_duplex_split', l: 'Split for non-duplex printer', t: 'Create separate front/back PDFs for manual duplex printing' },
+                                                { k: 'low_dpi', l: 'Fast mode (72 DPI)', t: 'Lower quality but faster processing' }
+                                            ].map(opt => (
+                                                <div key={opt.k} className="flex flex-col gap-1 rounded-lg border border-slate-100 bg-white/60 p-2.5 dark:border-slate-800 dark:bg-slate-950/50">
+                                                    <Tooltip text={opt.t}>
+                                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                                            <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${settings[opt.k] ? 'bg-cyan-600' : 'bg-gray-200 dark:bg-slate-700'}`}>
+                                                                <input type="checkbox" checked={settings[opt.k]} onChange={() => setSettings({...settings, [opt.k]: !settings[opt.k]})} className="sr-only" />
+                                                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${settings[opt.k] ? 'translate-x-5' : 'translate-x-1'}`}></span>
+                                                            </div>
+                                                            <span className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 dark:text-slate-300 group-hover:text-cyan-600 transition-colors">{opt.l}</span>
+                                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${settings[opt.k] ? 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-200' : 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'}`}>{settings[opt.k] ? 'On' : 'Off'}</span>
+                                                        </label>
+                                                    </Tooltip>
+                                                    {opt.s && <p className="ml-12 text-[10px] leading-4 text-gray-500">{opt.s}</p>}
+                                                    {opt.k === 'page_numbers' && settings.page_numbers && <select value={settings.pagenum_pos} onChange={e => setSettings({...settings, pagenum_pos: e.target.value})} className="ml-11 text-[10px] bg-gray-50 dark:bg-slate-950 border rounded p-1"><option value="bottom_center">Bottom Center</option><option value="bottom_right">Bottom Right</option><option value="top_center">Top Center</option><option value="top_right">Top Right</option></select>}
+                                                    {opt.k === 'separator' && settings.separator && <div className="ml-11 flex items-center gap-2"><span className="text-[10px] text-gray-400">Size:</span><input type="number" value={settings.separator_size} onChange={e => setSettings({...settings, separator_size: parseInt(e.target.value)})} className="w-12 text-[10px] bg-gray-50 dark:bg-slate-950 border rounded p-1" /></div>}
+                                                    {opt.k === 'border' && settings.border && <div className="ml-11"><label className="text-[10px] text-gray-400 flex justify-between"><span>Opacity</span><span>{settings.border_opacity}%</span></label><input type="range" min="0" max="100" value={settings.border_opacity} onChange={e => setSettings({...settings, border_opacity: parseInt(e.target.value)})} className="w-full" /></div>}
+                                                    {opt.k === 'manual_duplex_split' && settings.manual_duplex_split && <div className="ml-11 space-y-2">
+                                                        <label className="text-[10px] text-gray-500 flex items-center gap-2"><input type="checkbox" checked={settings.manual_duplex_reverse_back} onChange={() => setSettings({...settings, manual_duplex_reverse_back: !settings.manual_duplex_reverse_back})} /><span>Reverse back pages (front-feed printers)</span></label>
+                                                        <label className="text-[10px] text-gray-500 flex items-center gap-2"><input type="checkbox" checked={settings.manual_duplex_pad_even} onChange={() => setSettings({...settings, manual_duplex_pad_even: !settings.manual_duplex_pad_even})} /><span>Pad to even sheets (adds blank back if needed)</span></label>
+                                                        <label className="text-[10px] text-gray-500 flex items-center gap-2"><input type="checkbox" checked={settings.manual_duplex_instructions} onChange={() => setSettings({...settings, manual_duplex_instructions: !settings.manual_duplex_instructions})} /><span>Include print instructions file</span></label>
+                                                        <p className="text-[10px] text-cyan-500/80">Tip: If back pages come out upside-down or mismatched, keep this mode enabled and toggle only the reverse option.</p>
+                                                    </div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CollapsibleSection>
+
+                                    <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-800">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Output Format</label>
+                                        <div className="flex bg-gray-100 dark:bg-slate-800 p-1.5 rounded-xl">
+                                            {['single', 'per_file'].map(m => (
+                                                <button key={m} onClick={() => setSettings({...settings, output_split: m})} className={`px-5 py-2 text-xs font-bold rounded-lg transition-all ${settings.output_split === m ? 'bg-white dark:bg-slate-700 shadow-md text-cyan-600' : 'text-gray-400'}`}>{m === 'single' ? 'Single PDF' : 'ZIP (Per File)'}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <button 
+                                        disabled={files.length === 0 || files.some(f => f.status === 'loading')}
+                                        onClick={async () => {
+                                            if (files.length === 0) return;
+                                            setStatus("Starting..."); setProgress(0); setIsProcessing(true);
+                                            try {
+                                                const exportNames = getExportNames();
+                                                if (settings.output_split === 'per_file') {
+                                                    const zip = new JSZip();
+                                                    const fileConcurrency = getProcessingConcurrency(settings, 'file');
+                                                    const fileProgress = Array(files.length).fill(0);
+                                                    const updateFileProgress = (fileIndex, evt) => {
+                                                        if (typeof evt.percent === 'number') fileProgress[fileIndex] = evt.percent;
+                                                        const aggregate = fileProgress.reduce((sum, value) => sum + value, 0) / Math.max(1, files.length);
+                                                        setProgress(Math.round(aggregate * 0.9));
+                                                        if (evt.message) setStatus(`${fileIndex + 1}/${files.length}: ${evt.message}`);
+                                                    };
+                                                    setStatus(`Processing ${files.length} files with ${fileConcurrency} lane${fileConcurrency > 1 ? 's' : ''}...`);
+                                                    const perFileSettings = fileConcurrency > 1 ? { ...settings, performance_mode: settings.performance_mode === 'fast' ? 'balanced' : 'safe' } : settings;
+                                                    const zipEntries = await runLimited(files, fileConcurrency, async (f, i) => {
+                                                        const bytes = await processPDF([f], perFileSettings, (evt) => updateFileProgress(i, evt));
+                                                        const baseName = exportNames.entryBase(f, i);
+                                                        if (settings.manual_duplex_split) {
+                                                            setStatus(`Splitting ${f.name} for duplex...`);
+                                                            fileProgress[i] = Math.max(fileProgress[i], 92);
+                                                            const split = await splitForManualDuplex(bytes, { reverseBackPages: settings.manual_duplex_reverse_back, padToEven: settings.manual_duplex_pad_even });
+                                                            const entries = [
+                                                                { name: `${baseName}-front.pdf`, bytes: split.front },
+                                                                { name: `${baseName}-back.pdf`, bytes: split.back }
+                                                            ];
+                                                            fileProgress[i] = 100;
+                                                            updateFileProgress(i, { message: `Finished ${f.name}`, percent: 100 });
+                                                            return { baseName, split, entries };
+                                                        } else {
+                                                            fileProgress[i] = 100;
+                                                            updateFileProgress(i, { message: `Finished ${f.name}`, percent: 100 });
+                                                            return { baseName, entries: [{ name: `${baseName}.pdf`, bytes }] };
+                                                        }
+                                                    });
+                                                    zipEntries.forEach((result) => {
+                                                        result.entries.forEach(entry => zip.file(entry.name, entry.bytes));
+                                                        if (settings.manual_duplex_split && settings.manual_duplex_instructions) {
+                                                            addManualDuplexInstructions(zip, result.baseName, result.split, settings.manual_duplex_reverse_back);
+                                                        }
+                                                    });
+                                                    setStatus("Building ZIP...");
+                                                    setProgress(95);
+                                                    const content = await zip.generateAsync({type:"blob"});
+                                                    download(content, exportNames.perFileZip);
+                                                } else {
+                                                    const bytes = await processPDF(files, settings, (evt) => updateProcessingProgress(evt, 0, settings.manual_duplex_split ? 88 : 96)); 
+                                                    if (settings.manual_duplex_split) {
+                                                        setStatus("Splitting output for manual duplex...");
+                                                        setProgress(90);
+                                                        const split = await splitForManualDuplex(bytes, { reverseBackPages: settings.manual_duplex_reverse_back, padToEven: settings.manual_duplex_pad_even });
+                                                        const zip = new JSZip();
+                                                        zip.file(exportNames.frontName, split.front);
+                                                        zip.file(exportNames.backName, split.back);
+                                                        if (settings.manual_duplex_instructions) addManualDuplexInstructions(zip, exportNames.batchBase, split, settings.manual_duplex_reverse_back);
+                                                        setStatus("Building ZIP...");
+                                                        setProgress(96);
+                                                        const content = await zip.generateAsync({type:"blob"});
+                                                        download(content, exportNames.singleZip);
+                                                    } else {
+                                                        download(bytes, exportNames.singlePdf, "application/pdf");
+                                                    }
+                                                }
+                                                setProgress(100);
+                                                setShowSuccess(true);
+                                                setTimeout(() => setShowSuccess(false), 5000);
+                                            } catch (e) { 
+                                                alert(e.message); 
+                                            } finally { 
+                                                setIsProcessing(false);
+                                                setProgress(0);
+                                            }
+                                        }} 
+                                        className={`w-full py-5 font-black text-xl rounded-xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 ${files.length === 0 || files.some(f => f.status === 'loading') ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-slate-950 hover:bg-cyan-700 dark:bg-cyan-500 dark:hover:bg-cyan-400 dark:text-slate-950 text-white'}`}
+                                    >
+                                        {files.length === 0 ? 'Upload files to start' : files.some(f => f.status === 'loading') ? <><IconLoader /> Loading files...</> : <><IconUpload /> {(settings.output_split === 'single' && !settings.manual_duplex_split) ? 'Export PDF' : 'Export ZIP'}</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
